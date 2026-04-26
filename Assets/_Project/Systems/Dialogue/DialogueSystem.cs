@@ -42,6 +42,18 @@ namespace LastPatrol.Systems.Dialogue
             if (running == null) running = StartCoroutine(RunQueue());
         }
 
+        // 런타임 inline — SO 에셋 없이 한 줄 표시. 내면 보이스 + 선택 결과에 사용.
+        public void ShowInline(string speakerId, ColorTheme theme, string textKR, string textEN = null, float displaySecondsOverride = 0f)
+        {
+            var line = ScriptableObject.CreateInstance<DialogueLineSO>();
+            line.speakerId = speakerId;
+            line.theme = theme;
+            line.textKR = textKR;
+            line.textEN = textEN;
+            line.displaySecondsOverride = displaySecondsOverride;
+            Show(line);
+        }
+
         public void Show(DialogueSequenceSO seq)
         {
             if (seq == null) return;
@@ -113,10 +125,12 @@ namespace LastPatrol.Systems.Dialogue
         {
             switch (t)
             {
-                case ColorTheme.Cyan:  return new Color(0.49f, 0.78f, 0.85f);  // #7CC8D8 — M-07
-                case ColorTheme.Amber: return new Color(0.85f, 0.54f, 0.29f);  // #D88A4A — Maren
-                case ColorTheme.Blood: return new Color(0.66f, 0.19f, 0.16f);  // #A8302A — danger
-                default:               return new Color(0.541f, 0.498f, 0.459f); // #8A7F75 — subtle ink (narration)
+                case ColorTheme.Cyan:   return new Color(0.49f, 0.78f, 0.85f);   // #7CC8D8 — M-07
+                case ColorTheme.Amber:  return new Color(0.85f, 0.54f, 0.29f);   // #D88A4A — Maren / cop voice
+                case ColorTheme.Blood:  return new Color(0.66f, 0.19f, 0.16f);   // #A8302A — grief / danger
+                case ColorTheme.Cream:  return new Color(1.00f, 0.808f, 0.431f); // #FFCE6E — echo (Noah)
+                case ColorTheme.Hunch:  return new Color(0.561f, 0.647f, 0.478f); // #8FA57A — hunch (intuition)
+                default:                return new Color(0.541f, 0.498f, 0.459f); // #8A7F75 — subtle / cynicism
             }
         }
     }

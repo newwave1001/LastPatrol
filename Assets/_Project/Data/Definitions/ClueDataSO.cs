@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace LastPatrol.Data
@@ -22,7 +23,17 @@ namespace LastPatrol.Data
         [Tooltip("방 안 적이 모두 정리되어야 발견 가능")]
         public bool requiresRoomClear;
 
-        [Header("Dialogue")]
+        [Header("Dialogue (Legacy fallback — innerVoices 없을 때 사용)")]
         public DialogueLineSO discoveryDialogue;
+
+        [Header("v12 Inner Voice System")]
+        [Tooltip("순차 재생되는 내면 보이스 라인 2~3개 (비어있으면 v12 시스템 미사용 — 위 fallback)")]
+        public List<InnerVoiceLine> innerVoices = new List<InnerVoiceLine>();
+
+        [Tooltip("보이스 재생 후 등장하는 선택지 2~3개")]
+        public List<InvestigationChoice> choices = new List<InvestigationChoice>();
+
+        [Tooltip("씬 ClueObject 없이 다른 단서의 advanceTo로만 발견되는 단서")]
+        public bool advanceTargetOnly;
     }
 }

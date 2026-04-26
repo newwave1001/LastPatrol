@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace LastPatrol.Data
 {
-    public enum ColorTheme { Cyan, Amber, Blood, Subtle }
+    public enum ColorTheme { Cyan, Amber, Blood, Subtle, Cream, Hunch }
 
     [CreateAssetMenu(fileName = "DL_NewLine", menuName = "LastPatrol/Dialogue Line")]
     public class DialogueLineSO : ScriptableObject

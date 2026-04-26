@@ -15,6 +15,10 @@ namespace LastPatrol.Systems.Investigation
         [SerializeField] private CaseDataSO currentCase;
         [SerializeField] private bool playIntroOnStart = true;
 
+        [Header("Optional v12 Flow")]
+        [Tooltip("연결되어 있으면 innerVoices/choices를 가진 단서는 이 컨트롤러로 위임됨")]
+        [SerializeField] private VoiceFlowController voiceFlow;
+
         private readonly HashSet<string> discovered = new HashSet<string>();
 
         public CaseDataSO CurrentCase => currentCase;
@@ -59,11 +63,37 @@ namespace LastPatrol.Systems.Investigation
         {
             if (!CanDiscover(clue, roomCleared)) return;
 
+            // v12 path: 내면 보이스 + 선택지가 있으면 VoiceFlowController에 위임.
+            // 컨트롤러가 끝나면 CompleteDiscovery 콜백 호출.
+            if (voiceFlow != null && clue.innerVoices != null && clue.innerVoices.Count > 0)
+            {
+                discovered.Add(clue.clueId); // 즉시 플래그 — 재트리거 차단
+                OnClueDiscovered?.Invoke(clue);
+                voiceFlow.Begin(clue, OnFlowComplete);
+                return;
+            }
+
+            // Legacy fallback: 단일 라인 + 즉시 완료.
             discovered.Add(clue.clueId);
             if (clue.discoveryDialogue != null && DialogueSystem.Instance != null)
                 DialogueSystem.Instance.Show(clue.discoveryDialogue);
-
             OnClueDiscovered?.Invoke(clue);
+            CheckCaseComplete();
+        }
+
+        // VoiceFlowController가 advance 단서를 발견 처리할 때 사용 — 씬에 ClueObject 없는 단서.
+        public void DiscoverFromAdvance(ClueDataSO clue)
+        {
+            if (clue == null || discovered.Contains(clue.clueId)) return;
+            discovered.Add(clue.clueId);
+            OnClueDiscovered?.Invoke(clue);
+            CheckCaseComplete();
+        }
+
+        private void OnFlowComplete(ClueDataSO clue, InvestigationChoice picked)
+        {
+            // 보이스 플로우 끝남 — 케이스 완결 체크.
+            // advanceTo는 컨트롤러가 직접 DiscoverFromAdvance로 처리.
             CheckCaseComplete();
         }
 
