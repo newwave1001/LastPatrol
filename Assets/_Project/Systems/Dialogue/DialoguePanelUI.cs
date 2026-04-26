@@ -26,13 +26,13 @@ namespace LastPatrol.Systems.Dialogue
             if (canvasGroup != null) canvasGroup.alpha = 0f;
         }
 
-        public void SetSpeaker(string id, Color themeColor)
+        public void SetSpeaker(string id)
         {
-            if (speakerLabel != null)
-            {
-                speakerLabel.text = id;
-                speakerLabel.color = themeColor;
-            }
+            if (speakerLabel != null) speakerLabel.text = id;
+        }
+
+        public void SetAccent(Color themeColor)
+        {
             if (accentBar != null) accentBar.color = themeColor;
         }
 

@@ -75,7 +75,8 @@ namespace LastPatrol.Systems.Dialogue
             if (panel == null) yield break;
 
             panel.Show();
-            panel.SetSpeaker(line.speakerId, ThemeColor(line.theme));
+            panel.SetAccent(ThemeColor(line.theme));
+            panel.SetSpeaker(line.speakerId);
 
             string text = preferKorean
                 ? (string.IsNullOrEmpty(line.textKR) ? line.textEN : line.textKR)
@@ -112,10 +113,10 @@ namespace LastPatrol.Systems.Dialogue
         {
             switch (t)
             {
-                case ColorTheme.Cyan:  return new Color(0.49f, 0.78f, 0.85f);
-                case ColorTheme.Amber: return new Color(0.85f, 0.54f, 0.29f);
-                case ColorTheme.Blood: return new Color(0.66f, 0.19f, 0.16f);
-                default:               return new Color(0.96f, 0.93f, 0.88f); // Subtle / paper
+                case ColorTheme.Cyan:  return new Color(0.49f, 0.78f, 0.85f);  // #7CC8D8 — M-07
+                case ColorTheme.Amber: return new Color(0.85f, 0.54f, 0.29f);  // #D88A4A — Maren
+                case ColorTheme.Blood: return new Color(0.66f, 0.19f, 0.16f);  // #A8302A — danger
+                default:               return new Color(0.541f, 0.498f, 0.459f); // #8A7F75 — subtle ink (narration)
             }
         }
     }

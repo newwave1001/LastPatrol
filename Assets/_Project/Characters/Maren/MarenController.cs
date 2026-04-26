@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using LastPatrol.Core;
 using LastPatrol.Core.Input;
@@ -28,6 +29,8 @@ namespace LastPatrol.Characters
         public float CurrentHP => currentHP;
         public bool IsAlive => currentHP > 0f;
         public bool IsCharging { get; private set; }
+
+        public event Action OnDied;
 
         void Awake()
         {
@@ -90,8 +93,8 @@ namespace LastPatrol.Characters
 
         private void OnDeath()
         {
-            // TODO 2주차: 사망 연출, 게임오버 트리거.
             enabled = false;
+            OnDied?.Invoke();
         }
 
     }
