@@ -2,6 +2,7 @@ using UnityEngine;
 using LastPatrol.Characters;
 using LastPatrol.Characters.M07;
 using LastPatrol.Characters.Enemies;
+using LastPatrol.Systems.Investigation;
 
 namespace LastPatrol.Systems.World
 {
@@ -61,6 +62,17 @@ namespace LastPatrol.Systems.World
                 GUI.color = e.IsAlive ? Color.white : Color.gray;
                 GUI.Label(new Rect(origin.x, y, 600, lineHeight),
                     $"ENEMY{i}  HP {e.CurrentHP:F0}/{e.MaxHP:F0}   State: {e.CurrentState}", style);
+                y += lineHeight;
+            }
+
+            var inv = InvestigationSystem.Instance;
+            if (inv != null && inv.CurrentCase != null)
+            {
+                GUI.color = new Color(0.96f, 0.93f, 0.88f);
+                int total = inv.CurrentCase.clues != null ? inv.CurrentCase.clues.Count : 0;
+                int found = inv.DiscoveredClues.Count;
+                GUI.Label(new Rect(origin.x, y, 600, lineHeight),
+                    $"CASE   {inv.CurrentCase.caseId}   Clues {found}/{total}", style);
                 y += lineHeight;
             }
 
