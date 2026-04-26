@@ -1,0 +1,2753 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Last Patrol · v0.11 — 사건의 시작</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Serif:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #F5EEE0; --paper-warm: #E8DFCC;
+    --ink: #3A2E28; --subtle: #8A7F75; --accent: #6A4832;
+    --accent-warm: #D88A4A; --cream: #FFCE6E; --cyan: #7CC8D8;
+    --blood: #A8302A;
+    --floor-warm: #D4C5A8; --floor-cool: #BFB498;
+    --wall: #C8BDA8; --wall-edge: #E0D6C0;
+    --wood: #6A4832; --wood-dark: #3A2E28;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    background: var(--paper); color: var(--ink);
+    font-family: 'IBM Plex Serif', 'KoPub Batang', serif;
+    min-height: 100vh; overflow: hidden;
+  }
+  body {
+    display: flex; justify-content: center; align-items: center;
+    padding: 20px;
+    background: radial-gradient(ellipse at 50% 30%, #F8F2E6 0%, var(--paper) 60%, #DDD4C2 100%);
+  }
+  #stage { display: flex; flex-direction: column; gap: 12px; max-width: 980px; }
+  #title-bar {
+    padding: 4px 2px 10px;
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--subtle);
+    border-bottom: 1px solid rgba(138, 127, 117, 0.3);
+  }
+  #title-bar .title {
+    font-family: 'Cormorant Garamond', 'KoPub Batang', serif;
+    font-weight: 600; font-size: 18px; color: var(--ink);
+    letter-spacing: 0.03em; text-transform: none;
+  }
+  #title-bar .badge {
+    color: var(--blood); font-weight: 500;
+    display: flex; align-items: center; gap: 6px;
+  }
+  #title-bar .badge::before {
+    content: ''; display: inline-block; width: 6px; height: 6px;
+    border-radius: 50%; background: var(--blood);
+    animation: pulse 2.5s infinite;
+  }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+  #hud {
+    padding: 8px 4px;
+    display: flex; gap: 18px; align-items: center; flex-wrap: wrap;
+    font-family: 'IBM Plex Mono', monospace; font-size: 11px;
+  }
+  .hud-item { display: flex; align-items: center; gap: 8px; padding: 3px 8px;
+    border-left: 2px solid transparent; transition: all 0.25s; }
+  .hud-item.active { border-left-color: var(--cyan); background: rgba(124, 200, 216, 0.1); }
+  .hud-item.active.cop-active { border-left-color: var(--accent-warm); background: rgba(216, 138, 74, 0.1); }
+  .hud-label { color: var(--subtle); font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; }
+  .hud-value { color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
+  .stat-bar { display: inline-block; width: 80px; height: 4px;
+    background: rgba(138, 127, 117, 0.2); position: relative; vertical-align: middle; }
+  .stat-bar-fill { position: absolute; inset: 0; transition: width 0.2s; }
+  .stat-bar-fill.cyan  { background: var(--cyan); }
+  .stat-bar-fill.amber { background: var(--accent-warm); }
+
+  #canvas-wrap {
+    position: relative;
+    box-shadow: 0 0 0 1px rgba(138, 127, 117, 0.25), 0 14px 40px rgba(90, 74, 64, 0.25);
+    border-radius: 2px; overflow: hidden;
+  }
+  canvas { display: block; background: var(--paper); cursor: crosshair; }
+  #paper-grain {
+    position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(0deg, transparent 0 3px, rgba(90, 74, 64, 0.008) 3px 4px);
+    mix-blend-mode: multiply;
+  }
+
+  #status-panel {
+    padding: 10px 16px;
+    background: var(--paper);
+    border-left: 2px solid var(--cyan);
+    font-family: 'IBM Plex Serif', serif;
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--ink);
+    min-height: 44px;
+    transition: border-left-color 0.4s;
+  }
+  #status-panel.warning { border-left-color: var(--accent-warm); }
+  #status-panel.danger  { border-left-color: var(--blood); }
+  #status-panel .step {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8px; letter-spacing: 0.28em;
+    color: var(--subtle); text-transform: uppercase; margin-bottom: 4px;
+  }
+  #status-panel .title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 15px; font-weight: 600; color: var(--ink);
+  }
+
+  #dialogue-panel {
+    padding: 12px 14px;
+    background: var(--paper);
+    border-left: 2px solid var(--accent-warm);
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    min-height: 82px;
+    transition: border-left-color 0.4s;
+  }
+  #dialogue-panel.cyan  { border-left-color: var(--cyan); }
+  #dialogue-panel.amber { border-left-color: var(--accent-warm); }
+  #dialogue-panel.blood { border-left-color: var(--blood); }
+  #dialogue-panel.subtle{ border-left-color: var(--subtle); }
+
+  #dialogue-profile {
+    flex-shrink: 0;
+    width: 64px;
+    height: 64px;
+    background: #2A2A38;
+    border: 1px solid var(--subtle);
+    position: relative;
+    overflow: hidden;
+    image-rendering: pixelated;
+  }
+  #dialogue-content { flex: 1; min-width: 0; padding-top: 2px; }
+  #dialogue-speaker {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    color: var(--subtle);
+    text-transform: uppercase;
+    margin-bottom: 5px;
+  }
+  #dialogue-text {
+    font-family: 'IBM Plex Serif', 'KoPub Batang', serif;
+    font-size: 13px;
+    line-height: 1.65;
+    color: var(--ink);
+    white-space: pre-line;
+    min-height: 40px;
+  }
+  #dialogue-text::after {
+    content: '▊';
+    color: var(--accent-warm);
+    margin-left: 2px;
+    animation: caret 0.85s infinite;
+    opacity: 0;
+  }
+  #dialogue-text.typing::after { opacity: 1; }
+  @keyframes caret { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
+
+  #controls {
+    padding: 6px 4px 2px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px; color: var(--subtle);
+    letter-spacing: 0.1em; text-align: center; text-transform: uppercase;
+  }
+  kbd {
+    background: rgba(138, 127, 117, 0.15);
+    border: 1px solid rgba(138, 127, 117, 0.3);
+    padding: 1px 5px; color: var(--ink);
+    font-family: 'IBM Plex Mono', monospace; font-size: 9px;
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="title-bar">
+    <span class="title">INTERIOR · v0.11 — 사건의 시작</span>
+    <span class="badge">HOSTILE CONTACT</span>
+  </div>
+
+  <div id="hud">
+    <div class="hud-item" id="hud-cop">
+      <span class="hud-label">MAREN</span>
+      <span class="hud-value">HP</span>
+      <span class="stat-bar"><span class="stat-bar-fill amber" id="cop-hp" style="width:100%"></span></span>
+    </div>
+    <div class="hud-item active" id="hud-robot">
+      <span class="hud-label">M-07</span>
+      <span class="hud-value">BAT</span>
+      <span class="stat-bar"><span class="stat-bar-fill cyan" id="robot-bat" style="width:100%"></span></span>
+    </div>
+    <div class="hud-item">
+      <span class="hud-label">DISTANCE</span>
+      <span class="hud-value" id="distance">—</span>
+    </div>
+    <div class="hud-item">
+      <span class="hud-label">ENEMIES</span>
+      <span class="hud-value" id="enemy-count">0 / 6</span>
+    </div>
+    <div class="hud-item">
+      <span class="hud-label">INVESTIGATION</span>
+      <span class="hud-value" id="evidence-count">0 / 4</span>
+    </div>
+  </div>
+
+  <div id="canvas-wrap">
+    <canvas id="world" width="980" height="480"></canvas>
+    <div id="paper-grain"></div>
+    <div id="end-screen" style="position:absolute;inset:0;background:rgba(245,238,224,0.94);display:none;justify-content:center;align-items:center;flex-direction:column;gap:12px;z-index:10;">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.3em;color:var(--subtle);text-transform:uppercase;" id="end-label">CASE ADVANCED</span>
+      <h2 style="font-family:'Cormorant Garamond',serif;font-size:42px;font-weight:500;color:var(--accent);margin:0;" id="end-title">동부 23번지 · 타코</h2>
+      <div id="end-msg" style="color:var(--ink);opacity:0.7;font-size:13px;font-family:'IBM Plex Serif',serif;">다음 현장으로.</div>
+      <button onclick="location.reload()" style="margin-top:8px;padding:8px 22px;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;background:transparent;color:var(--ink);border:1px solid var(--subtle);cursor:pointer;">RESTART</button>
+    </div>
+  </div>
+
+  <div id="status-panel">
+    <div class="step" id="narr-step">기 · 起 · 현장 진입</div>
+    <div class="title" id="narr-title">가족 연락 두절 — 집 안을 조사하라.</div>
+  </div>
+
+  <div id="dialogue-panel" class="amber">
+    <canvas id="dialogue-profile" width="64" height="64"></canvas>
+    <div id="dialogue-content">
+      <div id="dialogue-speaker">MAREN · 경찰</div>
+      <div id="dialogue-text">집에 들어가 보자. M-07, 너 먼저.</div>
+    </div>
+  </div>
+
+  <div id="controls">
+    <kbd>A</kbd>/<kbd>D</kbd> 이동 &nbsp;·&nbsp;
+    <kbd>SPACE</kbd> 점프 (로봇) &nbsp;·&nbsp;
+    <kbd>L-CLICK</kbd> 로봇:연사 / 경찰:엄폐 &nbsp;·&nbsp;
+    <kbd>R</kbd> 충전 (경찰, 로봇 근처) &nbsp;·&nbsp;
+    <kbd>F</kbd> 조사 / 문 열기 &nbsp;·&nbsp;
+    <kbd>TAB</kbd> 전환 &nbsp;·&nbsp;
+    <kbd>R</kbd> 리셋 (게임 오버)
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+ * Last Patrol · v0.11
+ * ---------------------------------------------------------------------
+ * 변경점 (Jerry 피드백):
+ *   · 로봇 총알 → 엄폐물 관통 (전투 답답함 해소)
+ *   · 경찰 = MAREN (여성) — 새 픽셀 프로필 + 실내 스프라이트
+ *   · R = 충전 (SPACE → R), F = 조사/문열기, SPACE = 로봇 점프만
+ *   · 경찰 점프 제거
+ *   · 계단 구석 배치 + 자동 등반 (점프 불필요)
+ *   · 극적 4막 구조:
+ *     - 기: 바닥 마른 혈흔 (거실)
+ *     - 승: 주방 저항 흔적 (뒤집힌 식탁, 깨진 유리)
+ *     - 전: 2층 끌린 자국
+ *     - 결: 구석방 문 열기 → 시체 발견 → "동부 23번지 타코"
+ *   · 구석방 — 문 닫혀 있고 내부 렌더링 안 됨. F로 열어야 공개.
+ * ===================================================================== */
+
+const CFG = {
+  VIEW_W: 980, VIEW_H: 480,
+  WORLD_W: 1600, WORLD_H: 480,
+
+  GRAVITY: 0.5,
+  MOVE_SPEED: 2.0,
+  JUMP_VEL: -8.5,
+  STAIR_SPEED: 1.4,  // auto-climb speed on stairs
+
+  ROBOT_W: 14, ROBOT_H: 36,
+  COP_W: 14, COP_H: 36,
+  ROBOT_BATTERY_MAX: 100,
+  COP_HP_MAX: 100,
+
+  DIST_SAFE: 150,
+  DIST_WARNING: 280,
+
+  COP_COVER_SNAP_DIST: 24,
+  CHARGE_DIST: 60,
+  BATTERY_TRANSFER_RATE: 1.4,
+
+  ROBOT_FIRE_COOLDOWN: 7,
+  ROBOT_BULLET_SPEED: 12,
+  ROBOT_DAMAGE: 1,
+  ROBOT_BATTERY_SHOT_COST: 1.0,
+  ROBOT_DETECT_RANGE: 520,
+  ROBOT_AUTO_AIM_ASSIST: 80,
+
+  HUMANOID_HP: 3,
+  HUMANOID_AIM_TIME: 55,
+  HUMANOID_COOLDOWN: 80,
+  HUMANOID_BULLET_SPEED: 5,
+  HUMANOID_DAMAGE_COP: 18,
+  HUMANOID_DAMAGE_ROBOT: 8,
+  HUMANOID_LOS_RANGE: 420,
+
+  DRONE_HP: 2,
+  DRONE_AIM_TIME: 35,
+  DRONE_COOLDOWN: 60,
+  DRONE_BULLET_SPEED: 6,
+  DRONE_DAMAGE_COP: 12,
+  DRONE_DAMAGE_ROBOT: 6,
+  DRONE_LOS_RANGE: 480,
+  DRONE_SPEED: 1.6,
+
+  AMBUSH_HP: 2,
+  AMBUSH_EXECUTE_TIME: 180,
+  AMBUSH_DAMAGE_COP: 30,
+  AMBUSH_SPAWN_COOLDOWN: 240,
+
+  BATTERY_PASSIVE_DRAIN: 0,
+  COVER_DAMAGE_MULT: 3,
+};
+
+/* ===================== LEVEL ===================== */
+const FLOOR_1F = 380;
+const CEIL_1F  = 260;
+const FLOOR_2F = CEIL_1F;
+const CEIL_2F  = 130;
+const ROOF_TOP = 60;
+
+const PLATFORMS = [
+  { x: 0,    y: FLOOR_1F, w: 1600, h: 100, type: 'floor' },
+  // 2F floor split by stairs at right side and hidden room at far right
+  { x: 0,    y: FLOOR_2F, w: 1280, h: 8,   type: 'floor' },
+  { x: 1380, y: FLOOR_2F, w: 220,  h: 8,   type: 'floor' },  // small floor segment in hidden room
+  // Stair steps — LEFT-side stairs near x 80 going up (corner stair)
+  // Actually put stairs on the right corner to lead to hidden body room
+  { x: 1280, y: 372, w: 25, h: 8, type: 'step' },
+  { x: 1305, y: 348, w: 25, h: 8, type: 'step' },
+  { x: 1330, y: 324, w: 25, h: 8, type: 'step' },
+  { x: 1355, y: 300, w: 25, h: 8, type: 'step' },
+  { x: 1380, y: 276, w: 25, h: 8, type: 'step' },
+];
+
+const WALLS = [
+  { x: 0,    y: ROOF_TOP, w: 10, h: FLOOR_1F - ROOF_TOP, type: 'outer' },
+  { x: 1590, y: ROOF_TOP, w: 10, h: FLOOR_1F - ROOF_TOP, type: 'outer' },
+  // Divider between living and kitchen (1F)
+  { x: 420, y: CEIL_1F,  w: 8, h: 60, type: 'inner' },
+  // Wall separating hidden body room on 2F (right side)
+  // Door opening at y 220 (will be hidden by closed door)
+  { x: 1380, y: CEIL_2F, w: 8, h: 50, type: 'inner' },   // upper
+  { x: 1380, y: 235,     w: 8, h: 25, type: 'inner' },   // lower (gap between = doorway)
+  { x: 0, y: ROOF_TOP - 5, w: 1600, h: 10, type: 'roof' },
+];
+
+const ROOMS = [
+  { id: 'living',  x: 10,   y: CEIL_1F, w: 410,  h: FLOOR_1F - CEIL_1F, label: '거실',   floor: '#D4C5A8', wall: '#F0E8D8' },
+  { id: 'kitchen', x: 428,  y: CEIL_1F, w: 590,  h: FLOOR_1F - CEIL_1F, label: '주방',   floor: '#C8BDA8', wall: '#E8DFC8' },
+  { id: 'corridor',x: 1018, y: CEIL_1F, w: 572,  h: FLOOR_1F - CEIL_1F, label: '복도',   floor: '#CCC0A5', wall: '#EDE3CE' },
+  { id: 'upperL',  x: 10,   y: CEIL_2F, w: 1370, h: FLOOR_2F - CEIL_2F, label: '2층 복도', floor: '#BFB498', wall: '#E8DFC8' },
+  // Hidden body room — NOT rendered until door opened
+  { id: 'bodyroom',x: 1388, y: CEIL_2F, w: 202,  h: FLOOR_2F - CEIL_2F, label: '?',     floor: '#B8A88A', wall: '#C8BDA8', hidden: true },
+];
+
+// Stair auto-climb zone (invisible trigger region covering the stairs)
+const STAIR_ZONE = { x: 1270, y: CEIL_1F, w: 145, h: FLOOR_1F - CEIL_1F };
+
+// Hidden door
+const HIDDEN_DOOR = {
+  x: 1378, y: 235,
+  w: 12, h: 50,
+  open: false,
+  opening: false,
+  openFrame: 0,
+};
+
+/* Covers — cop-only, blocks ENEMY bullets, robot bullets pass through */
+const COVERS = [
+  { id: 'sofa',    x: 120, y: 352, w: 100, h: 28, integrity: 80,  label: '소파',     kind: 'sofa' },
+  { id: 'shelf_L', x: 30,  y: 300, w: 30,  h: 80, integrity: 60,  label: '책장',     kind: 'shelf' },
+  { id: 'counter', x: 440, y: 340, w: 180, h: 40, integrity: 120, label: '조리대',   kind: 'counter' },
+  { id: 'fridge',  x: 640, y: 316, w: 36,  h: 64, integrity: 150, label: '냉장고',   kind: 'fridge' },
+  { id: 'dining',  x: 800, y: 356, w: 80,  h: 24, integrity: 60,  label: '식탁',     kind: 'dining_flipped' },  // flipped over (evidence)
+  { id: 'plant',   x: 1080, y: 344, w: 28, h: 36, integrity: 20,  label: '화분',     kind: 'plant' },
+  { id: 'desk',    x: 200, y: 232, w: 90,  h: 28, integrity: 55,  label: '책상',     kind: 'desk' },
+  { id: 'bookcase',x: 500, y: 180, w: 90,  h: 80, integrity: 90,  label: '책장',     kind: 'bookcase' },
+];
+
+const WINDOWS = [
+  { x: 180, y: 290, w: 60,  h: 50 },
+  { x: 700, y: 290, w: 80,  h: 50 },
+  { x: 1100, y: 290, w: 60, h: 50 },
+  { x: 350, y: 160, w: 60, h: 50 },
+  { x: 900, y: 160, w: 70, h: 50 },
+];
+
+const DOORS = [
+  { id: 'd1', x: 400, y: FLOOR_1F - 60, room: 'living', dir: 'right' },
+  { id: 'd2', x: 500, y: FLOOR_1F - 60, room: 'kitchen', dir: 'left' },
+  { id: 'd3', x: 960, y: FLOOR_1F - 60, room: 'kitchen', dir: 'right' },
+  { id: 'd4', x: 450, y: FLOOR_2F - 60, room: 'upperL', dir: 'right' },
+];
+
+/* ===================== ENEMIES ===================== */
+const ENEMIES_INIT = [
+  { id: 'h1', type: 'humanoid', x: 300, y: FLOOR_1F - 34, room: 'living', patrol: { min: 260, max: 390 } },
+  { id: 'h2', type: 'humanoid', x: 580, y: FLOOR_1F - 34, room: 'kitchen', patrol: { min: 540, max: 700 } },
+  { id: 'h3', type: 'humanoid', x: 920, y: FLOOR_1F - 34, room: 'kitchen', patrol: { min: 870, max: 990 } },
+  { id: 'h4', type: 'humanoid', x: 1080, y: FLOOR_1F - 34, room: 'corridor', patrol: { min: 1030, max: 1170 } },
+  { id: 'h5', type: 'humanoid', x: 600, y: FLOOR_2F - 34, room: 'upperL', patrol: { min: 500, max: 800 } },
+  { id: 'dr1', type: 'drone', x: 250, y: 310, room: 'living', hoverY: 310, patrol: { min: 200, max: 400 } },
+];
+
+/* ===================== INVESTIGATION ACTS =====================
+ * 기-승-전-결 dramatic structure.
+ * Each act triggers on specific interaction or location.
+ */
+const INVESTIGATION = {
+  // 기 — 거실 마른 혈흔 (바닥 단서, 다가가면 자동 발견)
+  blood_dry: {
+    id: 'blood_dry',
+    act: '기', hanzi: '起',
+    x: 200, y: FLOOR_1F - 8, room: 'living',
+    label: '마른 혈흔',
+    dialogue: { speaker: 'MAREN', color: 'amber',
+      text: '피가 말랐다. 몇 시간 전 일이야.\n누가 여기서 다쳤다.' },
+    auto: true,  // triggered by proximity, not F key
+  },
+  // 승 — 주방 저항 흔적 (뒤집힌 식탁)
+  struggle: {
+    id: 'struggle',
+    act: '승', hanzi: '承',
+    coverRef: 'dining',
+    room: 'kitchen',
+    label: '뒤집힌 식탁',
+    dialogue: { speaker: 'MAREN', color: 'amber',
+      text: '식탁이 뒤집혔다. 유리컵도 깨졌고.\n저항한 거야. 그리고 도망갔다.' },
+    requiresRoomClear: true,
+  },
+  // 전 — 2층 끌린 자국
+  drag_trail: {
+    id: 'drag_trail',
+    act: '전', hanzi: '轉',
+    x: 1200, y: FLOOR_2F - 8, room: 'upperL',
+    label: '끌린 자국',
+    dialogue: { speaker: 'MAREN', color: 'amber',
+      text: '끌린 자국이 저 방문까지 이어져 있다.\n뭔가를... 누군가를 끌고 갔다.' },
+    auto: true,
+  },
+  // 결 — 구석방 시체 (문 열어야 접근)
+  body: {
+    id: 'body',
+    act: '결', hanzi: '結',
+    x: 1500, y: FLOOR_2F - 22, room: 'bodyroom',
+    label: '시체',
+    dialogue: { speaker: 'MAREN', color: 'blood',
+      text: '찾았다. 남편이야... 이미 식었다.\n주머니에 뭔가 있다.' },
+    auto: false,  // requires F key
+    requiresDoor: true,
+  },
+  // 결 후속 — 쪽지
+  note: {
+    id: 'note',
+    act: '결', hanzi: '結',
+    x: 1500, y: FLOOR_2F - 22, room: 'bodyroom',
+    label: '쪽지',
+    dialogue: { speaker: 'MAREN', color: 'blood',
+      text: '쪽지 한 장. 필체는 급하게 쓴.\n"동부 23번지 · 타코"' },
+    auto: false,
+    requiresPrevious: 'body',
+  },
+};
+
+/* ===================== DIALOGUE LIBRARY ===================== */
+const DIALOGUE = {
+  intro: { speaker: 'MAREN', text: '132 웨스트사이드. 도착했다.\nM-07, 너 먼저 들어가라.', color: 'amber' },
+  enter_living: { speaker: 'MAREN', text: '거실이다. 조용해.\n하지만 뭔가 있어.', color: 'amber' },
+  enter_kitchen: { speaker: 'MAREN', text: '주방. 여기서 무슨 일이 있었는지 봐야겠다.', color: 'amber' },
+  enter_corridor: { speaker: 'MAREN', text: '복도. 계단이 구석에 있어.\n위층으로 가야겠다.', color: 'amber' },
+  enter_upperL: { speaker: 'MAREN', text: '2층 복도. 끌린 자국이 이어진다.', color: 'amber' },
+  enter_bodyroom: { speaker: 'MAREN', text: '...여기다.', color: 'blood' },
+  robot_scan: { speaker: 'M-07', text: '열원 스캔. 적대 로봇 감지.\n교전 시작.', color: 'cyan' },
+  low_battery: { speaker: 'M-07', text: '배터리 부족. 충전 필요.', color: 'cyan' },
+  charging: { speaker: 'M-07', text: '충전 중. 감사합니다.', color: 'cyan' },
+  danger: { speaker: 'M-07', text: '경고. MAREN, 거리 초과.\n복귀 바람.', color: 'blood' },
+  ambush: { speaker: 'MAREN', text: '뒤에 뭔가 있어!!', color: 'blood' },
+  room_cleared: { speaker: 'M-07', text: '구역 정리 완료.\n조사 가능.', color: 'cyan' },
+  door_locked: { speaker: 'MAREN', text: '문이 닫혀 있다.\nF로 열어보자.', color: 'amber' },
+  door_opening: { speaker: 'MAREN', text: '문을 연다...', color: 'subtle' },
+  mission_complete: { speaker: 'MAREN', text: '동부 23번지. 타코...\n다음 현장이다.', color: 'amber' },
+  cop_down: { speaker: 'M-07', text: 'MAREN, 응답 없음.\n임무 실패.', color: 'blood' },
+};
+
+/* ===================== STATE ===================== */
+const state = {
+  active: 'robot',
+  robot: {
+    x: 80, y: FLOOR_1F - 36,
+    vx: 0, vy: 0, onGround: false, facing: 1,
+    battery: 60,
+    fireCooldown: 0, muzzleFlash: 0, turretAngle: 0,
+    hitTime: 0, autoTarget: null,
+  },
+  cop: {
+    x: 30, y: FLOOR_1F - 36,
+    vx: 0, vy: 0, onGround: false, facing: 1,
+    hp: CFG.COP_HP_MAX,
+    inCover: null, wantsCover: false,
+    hitTime: 0, isCharging: false,
+  },
+  enemies: ENEMIES_INIT.map(e => ({
+    ...e, hp: e.type === 'humanoid' ? CFG.HUMANOID_HP : CFG.DRONE_HP,
+    alive: true, aimAngle: 0, aimTimer: 0, hitTime: 0,
+    patrolDir: 1, alertLevel: 0, facing: -1, vx: 0, vy: 0,
+  })),
+  ambushes: [], ambushCooldown: 0,
+  covers: COVERS.map(c => ({ ...c, hp: c.integrity, destroyed: false })),
+  bullets: [], particles: [],
+  camera: { x: 0, y: 0 },
+  keys: {},
+  mouse: { x: 0, y: 0, worldX: 0, worldY: 0, leftDown: false },
+  time: 0, dust: [],
+  investigated: {},        // id → true once completed
+  investigationCount: 0,
+  enemiesKilled: 0,
+  clearedRooms: {},
+  distance: 0, distanceBand: 'safe',
+  warningVignette: 0, dangerVignette: 0,
+  currentRoom: null, roomEntryFired: {},
+  lowBatteryFired: false, dangerFired: false, chargingFired: false,
+  door: HIDDEN_DOOR,
+  dialogue: {
+    speaker: 'MAREN', text: '', fullText: '', charIndex: 0,
+    typing: false, color: 'amber',
+  },
+  currentAct: '기',
+  gameOver: false, won: false,
+};
+
+for (let i = 0; i < 50; i++) {
+  state.dust.push({
+    x: Math.random() * CFG.WORLD_W,
+    y: 80 + Math.random() * 320,
+    vx: -0.05 + Math.random() * 0.1,
+    vy: -0.04 + Math.random() * 0.03,
+    size: 0.4 + Math.random() * 1.0,
+    alpha: 0.15 + Math.random() * 0.3,
+  });
+}
+
+/* ===================== INPUT ===================== */
+const KEY_MAP = {
+  'w': 'up', 'arrowup': 'up',
+  's': 'down', 'arrowdown': 'down',
+  'a': 'left', 'arrowleft': 'left',
+  'd': 'right', 'arrowright': 'right',
+  ' ': 'jump',
+  'tab': 'switch',
+  'f': 'inspect',
+  'r': 'charge',
+  'escape': 'reset',
+};
+const justPressed = {};
+document.addEventListener('keydown', e => {
+  const k = KEY_MAP[e.key.toLowerCase()];
+  if (!k) return;
+  e.preventDefault();
+  if (!state.keys[k]) justPressed[k] = true;
+  state.keys[k] = true;
+});
+document.addEventListener('keyup', e => {
+  const k = KEY_MAP[e.key.toLowerCase()];
+  if (!k) return;
+  state.keys[k] = false;
+});
+window.addEventListener('blur', () => { state.keys = {}; state.mouse.leftDown = false; });
+
+const canvas = document.getElementById('world');
+const ctx = canvas.getContext('2d');
+canvas.addEventListener('mousemove', e => {
+  const rect = canvas.getBoundingClientRect();
+  state.mouse.x = (e.clientX - rect.left) * (canvas.width / rect.width);
+  state.mouse.y = (e.clientY - rect.top) * (canvas.height / rect.height);
+  state.mouse.worldX = state.mouse.x + state.camera.x;
+  state.mouse.worldY = state.mouse.y + state.camera.y;
+});
+canvas.addEventListener('mousedown', e => {
+  if (e.button === 0) { state.mouse.leftDown = true; e.preventDefault(); }
+});
+canvas.addEventListener('mouseup', e => {
+  if (e.button === 0) state.mouse.leftDown = false;
+});
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+canvas.addEventListener('wheel', e => { e.preventDefault(); switchUnit(); });
+
+function switchUnit() {
+  state.active = state.active === 'cop' ? 'robot' : 'cop';
+  document.getElementById('hud-cop').classList.toggle('active', state.active === 'cop');
+  document.getElementById('hud-cop').classList.toggle('cop-active', state.active === 'cop');
+  document.getElementById('hud-robot').classList.toggle('active', state.active === 'robot');
+  if (state.active === 'robot') state.cop.wantsCover = false;
+}
+
+/* ===================== PHYSICS ===================== */
+function rectOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
+  return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+}
+
+function applyPhysics(c, W, H) {
+  let newX = c.x + c.vx;
+  for (const w of WALLS) {
+    if (rectOverlap(newX, c.y, W, H, w.x, w.y, w.w, w.h)) {
+      if (c.vx > 0) newX = w.x - W;
+      else if (c.vx < 0) newX = w.x + w.w;
+      c.vx = 0;
+    }
+  }
+  // Closed hidden door blocks cop but NOT robot? Actually block both for immersion
+  if (!state.door.open) {
+    const d = state.door;
+    if (rectOverlap(newX, c.y, W, H, d.x, d.y, d.w, d.h)) {
+      if (c.vx > 0) newX = d.x - W;
+      else if (c.vx < 0) newX = d.x + d.w;
+      c.vx = 0;
+    }
+  }
+  c.x = newX;
+
+  let newY = c.y + c.vy;
+  c.onGround = false;
+  for (const p of PLATFORMS) {
+    if (rectOverlap(c.x, newY, W, H, p.x, p.y, p.w, p.h)) {
+      if (c.vy >= 0 && c.y + H <= p.y + 3) {
+        newY = p.y - H;
+        c.vy = 0;
+        c.onGround = true;
+      }
+    }
+  }
+  for (const w of WALLS) {
+    if (rectOverlap(c.x, newY, W, H, w.x, w.y, w.w, w.h)) {
+      if (c.vy < 0) { newY = w.y + w.h; c.vy = 0; }
+    }
+  }
+  c.y = newY;
+  c.x = Math.max(0, Math.min(CFG.WORLD_W - W, c.x));
+  if (c.y > CFG.WORLD_H + 100) { c.y = FLOOR_1F - H; c.x = 60; c.vy = 0; }
+}
+
+/* ===================== STAIR AUTO-CLIMB ===================== */
+function tryStairClimb(c, W, H) {
+  // If character is in the stair zone AND holding up or a direction, auto-climb
+  const inZone = c.x + W > STAIR_ZONE.x && c.x < STAIR_ZONE.x + STAIR_ZONE.w;
+  if (!inZone) return false;
+
+  const isCop = c === state.cop;
+  const isActive = (isCop && state.active === 'cop') || (!isCop && state.active === 'robot');
+  if (!isActive) return false;
+
+  // Determine target floor based on direction
+  const goingUp = state.keys.up || (state.keys.right && c.x < STAIR_ZONE.x + STAIR_ZONE.w - 20);
+  const goingDown = state.keys.down || (state.keys.left && c.x > STAIR_ZONE.x + 20 && c.y < FLOOR_1F - H - 20);
+
+  // Decide: if on 1F floor and pressing up/right → climb
+  if (c.y >= FLOOR_1F - H - 5 && (state.keys.up || state.keys.right)) {
+    // Snap climb toward 2F floor
+    c.x += CFG.STAIR_SPEED * 0.6;
+    c.y -= CFG.STAIR_SPEED;
+    // Clamp to stair path (diagonal up-right)
+    const progress = (c.x - STAIR_ZONE.x) / STAIR_ZONE.w;
+    const stairY = FLOOR_1F - progress * (FLOOR_1F - FLOOR_2F);
+    if (c.y + H > stairY + 2) c.y = stairY - H;
+    c.vy = 0;
+    c.onGround = true;
+    c.facing = 1;
+    return true;
+  }
+  // If on 2F and going back down
+  if (c.y <= FLOOR_2F - H + 5 && (state.keys.down || state.keys.left)) {
+    c.x -= CFG.STAIR_SPEED * 0.6;
+    c.y += CFG.STAIR_SPEED;
+    const progress = (c.x - STAIR_ZONE.x) / STAIR_ZONE.w;
+    const stairY = FLOOR_1F - progress * (FLOOR_1F - FLOOR_2F);
+    if (c.y + H < stairY - 2) c.y = stairY - H;
+    c.vy = 0;
+    c.onGround = true;
+    c.facing = -1;
+    return true;
+  }
+  return false;
+}
+
+/* ===================== ROBOT UPDATE ===================== */
+function updateRobot() {
+  const r = state.robot;
+  const isActive = state.active === 'robot';
+
+  let hInput = 0;
+  if (isActive) {
+    if (state.keys.left) hInput = -1;
+    if (state.keys.right) hInput = 1;
+  }
+  r.vx = hInput * CFG.MOVE_SPEED;
+  if (hInput !== 0) r.facing = hInput;
+
+  if (isActive && justPressed.jump && r.onGround) {
+    r.vy = CFG.JUMP_VEL; r.onGround = false;
+  }
+
+  r.vy += CFG.GRAVITY;
+  if (r.vy > 12) r.vy = 12;
+
+  // Check stair climb FIRST (overrides physics)
+  const climbing = tryStairClimb(r, CFG.ROBOT_W, CFG.ROBOT_H);
+  if (!climbing) {
+    applyPhysics(r, CFG.ROBOT_W, CFG.ROBOT_H);
+  }
+
+  // Turret aim
+  const sx = r.x + CFG.ROBOT_W / 2;
+  const sy = r.y + 10;
+
+  let bestTarget = null, bestD = Infinity;
+  for (const e of [...state.enemies, ...state.ambushes]) {
+    if (!e.alive) continue;
+    const ex = e.x + 7, ey = e.y + 16;
+    const d = Math.hypot(ex - sx, ey - sy);
+    if (d > CFG.ROBOT_DETECT_RANGE) continue;
+    if (!hasLOSForRobot(sx, sy, ex, ey)) continue;
+    if (d < bestD) { bestD = d; bestTarget = e; }
+  }
+
+  if (isActive) {
+    let aimX = state.mouse.worldX;
+    let aimY = state.mouse.worldY;
+    let snapped = false;
+    if (bestTarget) {
+      const ex = bestTarget.x + 7, ey = bestTarget.y + 16;
+      const cursorToEnemy = Math.hypot(state.mouse.worldX - ex, state.mouse.worldY - ey);
+      if (cursorToEnemy < CFG.ROBOT_AUTO_AIM_ASSIST) {
+        aimX = ex; aimY = ey; snapped = true;
+      }
+    }
+    r.turretAngle = Math.atan2(aimY - sy, aimX - sx);
+    r.autoTarget = snapped ? bestTarget : null;
+    r.facing = aimX > sx ? 1 : -1;
+  } else {
+    if (bestTarget) {
+      const ex = bestTarget.x + 7, ey = bestTarget.y + 16;
+      r.turretAngle = Math.atan2(ey - sy, ex - sx);
+      r.facing = bestTarget.x > r.x ? 1 : -1;
+      r.autoTarget = bestTarget;
+      if (r.battery > 0 && r.fireCooldown <= 0) fireRobotBullet();
+    } else {
+      r.autoTarget = null;
+    }
+  }
+
+  if (isActive && state.mouse.leftDown && r.battery > 0 && r.fireCooldown <= 0) {
+    fireRobotBullet();
+  }
+
+  if (r.fireCooldown > 0) r.fireCooldown--;
+  if (r.muzzleFlash > 0) r.muzzleFlash--;
+  if (r.hitTime > 0) r.hitTime--;
+}
+
+// LOS for robot — ignores covers (robot shoots through covers)
+function hasLOSForRobot(fromX, fromY, toX, toY) {
+  const steps = 25;
+  const dx = (toX - fromX) / steps;
+  const dy = (toY - fromY) / steps;
+  for (let i = 1; i < steps; i++) {
+    const x = fromX + dx * i;
+    const y = fromY + dy * i;
+    for (const w of WALLS) {
+      if (x >= w.x && x <= w.x + w.w && y >= w.y && y <= w.y + w.h) return false;
+    }
+    for (const p of PLATFORMS) {
+      if (p.type === 'floor' && p.h > 20) {
+        if (x >= p.x && x <= p.x + p.w && y >= p.y && y <= p.y + p.h) return false;
+      }
+    }
+    // Closed door blocks
+    if (!state.door.open) {
+      const d = state.door;
+      if (x >= d.x && x <= d.x + d.w && y >= d.y && y <= d.y + d.h) return false;
+    }
+  }
+  return true;
+}
+
+// LOS for enemies — covers and door block
+function hasLOS(fromX, fromY, toX, toY) {
+  const steps = 25;
+  const dx = (toX - fromX) / steps;
+  const dy = (toY - fromY) / steps;
+  for (let i = 1; i < steps; i++) {
+    const x = fromX + dx * i;
+    const y = fromY + dy * i;
+    for (const w of WALLS) {
+      if (x >= w.x && x <= w.x + w.w && y >= w.y && y <= w.y + w.h) return false;
+    }
+    for (const p of PLATFORMS) {
+      if (p.type === 'floor' && p.h > 20) {
+        if (x >= p.x && x <= p.x + p.w && y >= p.y && y <= p.y + p.h) return false;
+      }
+    }
+    for (const c of state.covers) {
+      if (c.destroyed) continue;
+      if (x >= c.x && x <= c.x + c.w && y >= c.y && y <= c.y + c.h) return false;
+    }
+    if (!state.door.open) {
+      const d = state.door;
+      if (x >= d.x && x <= d.x + d.w && y >= d.y && y <= d.y + d.h) return false;
+    }
+  }
+  return true;
+}
+
+function fireRobotBullet() {
+  const r = state.robot;
+  const sx = r.x + CFG.ROBOT_W / 2;
+  const sy = r.y + 10;
+  const nx = Math.cos(r.turretAngle);
+  const ny = Math.sin(r.turretAngle);
+  state.bullets.push({
+    x: sx + nx * 14, y: sy + ny * 14,
+    vx: nx * CFG.ROBOT_BULLET_SPEED, vy: ny * CFG.ROBOT_BULLET_SPEED,
+    owner: 'robot', life: 55, trail: [],
+  });
+  r.muzzleFlash = 5;
+  r.fireCooldown = CFG.ROBOT_FIRE_COOLDOWN;
+  r.battery = Math.max(0, r.battery - CFG.ROBOT_BATTERY_SHOT_COST);
+}
+
+/* ===================== COP UPDATE ===================== */
+function updateCop() {
+  const c = state.cop;
+  const isActive = state.active === 'cop';
+
+  if (isActive) c.wantsCover = state.mouse.leftDown;
+
+  if (c.wantsCover && c.onGround) {
+    if (!c.inCover) {
+      let best = null, minD = CFG.COP_COVER_SNAP_DIST;
+      const cx = c.x + CFG.COP_W / 2;
+      for (const cov of state.covers) {
+        if (cov.destroyed) continue;
+        const coverBase = cov.y + cov.h;
+        const charBase = c.y + CFG.COP_H;
+        if (Math.abs(coverBase - charBase) > 12) continue;
+        const covCx = cov.x + cov.w / 2;
+        const d = Math.hypot(cx - covCx, 0);
+        if (d < minD && d < cov.w + 20) { minD = d; best = cov; }
+      }
+      if (best) {
+        c.inCover = best;
+        const cx = c.x + CFG.COP_W / 2;
+        const covCx = best.x + best.w / 2;
+        if (cx < covCx) c.x = best.x - CFG.COP_W - 2;
+        else c.x = best.x + best.w + 2;
+      }
+    }
+  } else if (c.inCover) {
+    c.inCover = null;
+  }
+
+  let hInput = 0;
+  if (isActive) {
+    if (state.keys.left) hInput = -1;
+    if (state.keys.right) hInput = 1;
+  }
+
+  if (c.inCover) {
+    if (Math.abs(hInput) > 0) {
+      const covCx = c.inCover.x + c.inCover.w / 2;
+      const movingAway = (hInput < 0 && c.x < covCx) || (hInput > 0 && c.x > covCx);
+      if (movingAway) {
+        c.inCover = null; c.wantsCover = false;
+        c.vx = hInput * CFG.MOVE_SPEED;
+      } else c.vx = 0;
+    } else c.vx = 0;
+  } else {
+    c.vx = hInput * CFG.MOVE_SPEED;
+    if (hInput !== 0) c.facing = hInput;
+  }
+
+  // Cop does NOT jump — stairs auto-climb instead
+
+  if (c.inCover) { c.vy = 0; }
+  else {
+    c.vy += CFG.GRAVITY;
+    if (c.vy > 12) c.vy = 12;
+  }
+
+  const climbing = tryStairClimb(c, CFG.COP_W, CFG.COP_H);
+  if (!climbing) {
+    applyPhysics(c, CFG.COP_W, CFG.COP_H);
+  }
+
+  // Charging: R key hold while near robot
+  c.isCharging = false;
+  if (isActive && state.keys.charge) {
+    const dist = Math.hypot(c.x - state.robot.x, c.y - state.robot.y);
+    if (dist < CFG.CHARGE_DIST) {
+      state.robot.battery = Math.min(CFG.ROBOT_BATTERY_MAX,
+        state.robot.battery + CFG.BATTERY_TRANSFER_RATE);
+      c.isCharging = true;
+    }
+  }
+
+  // Inspection / door
+  if (isActive && justPressed.inspect) {
+    handleInspect();
+  }
+
+  if (c.hitTime > 0) c.hitTime--;
+}
+
+/* ===================== INSPECTION ===================== */
+function handleInspect() {
+  const cop = state.cop;
+  const cx = cop.x + CFG.COP_W / 2;
+  const cy = cop.y + CFG.COP_H / 2;
+
+  // First priority: hidden door
+  const d = state.door;
+  if (!d.open && !d.opening) {
+    const doorCx = d.x + d.w / 2;
+    if (Math.abs(cx - doorCx) < 40 && Math.abs(cy - (d.y + d.h / 2)) < 40) {
+      d.opening = true;
+      d.openFrame = 0;
+      showDialogue('door_opening');
+      return;
+    }
+  }
+
+  // Check all manual investigation items
+  for (const key in INVESTIGATION) {
+    const item = INVESTIGATION[key];
+    if (state.investigated[item.id]) continue;
+    if (item.auto) continue;
+    if (item.requiresDoor && !d.open) continue;
+    if (item.requiresPrevious && !state.investigated[item.requiresPrevious]) continue;
+
+    // Check proximity
+    let ix = item.x, iy = item.y;
+    if (item.coverRef) {
+      const cov = state.covers.find(c => c.id === item.coverRef);
+      if (!cov) continue;
+      ix = cov.x + cov.w / 2;
+      iy = cov.y + cov.h / 2;
+    }
+    if (Math.hypot(cx - ix, cy - iy) < 50) {
+      if (item.requiresRoomClear && !state.clearedRooms[item.room]) {
+        showDialogue('ambush');  // "adversary nearby" — placeholder
+        return;
+      }
+      triggerInvestigation(item);
+      return;
+    }
+  }
+}
+
+function triggerInvestigation(item) {
+  state.investigated[item.id] = true;
+  state.investigationCount++;
+  showDialogue({ ...item.dialogue, _inline: true });
+  state.currentAct = item.act;
+  document.getElementById('narr-step').textContent = `${item.act} · ${item.hanzi} · ${item.label}`;
+  document.getElementById('narr-title').textContent = item.dialogue.text.split('\n')[0];
+  updateHUD();
+
+  // If this was the "body" step, auto-queue the "note" after a pause
+  if (item.id === 'body') {
+    setTimeout(() => {
+      const note = INVESTIGATION.note;
+      state.investigated[note.id] = true;
+      state.investigationCount++;
+      showDialogue({ ...note.dialogue, _inline: true });
+      document.getElementById('narr-step').textContent = `${note.act} · ${note.hanzi} · ${note.label}`;
+      document.getElementById('narr-title').textContent = note.dialogue.text.split('\n')[0];
+      updateHUD();
+      setTimeout(() => {
+        showDialogue('mission_complete');
+        setTimeout(() => endGame(true), 3000);
+      }, 4000);
+    }, 3800);
+  }
+}
+
+/* ===================== AUTO CLUES (기, 전) ===================== */
+function checkAutoClues() {
+  const cop = state.cop;
+  const cx = cop.x + CFG.COP_W / 2;
+  const cy = cop.y + CFG.COP_H / 2;
+
+  for (const key in INVESTIGATION) {
+    const item = INVESTIGATION[key];
+    if (!item.auto) continue;
+    if (state.investigated[item.id]) continue;
+    if (Math.hypot(cx - item.x, cy - item.y) < 35) {
+      triggerInvestigation(item);
+      return;
+    }
+  }
+}
+
+/* ===================== DIALOGUE SYSTEM ===================== */
+function showDialogue(idOrObj) {
+  const d = typeof idOrObj === 'string' ? DIALOGUE[idOrObj] : idOrObj;
+  if (!d) return;
+  state.dialogue.speaker = d.speaker;
+  state.dialogue.fullText = d.text;
+  state.dialogue.text = '';
+  state.dialogue.charIndex = 0;
+  state.dialogue.typing = true;
+  state.dialogue.color = d.color || 'amber';
+
+  const panel = document.getElementById('dialogue-panel');
+  panel.classList.remove('cyan', 'amber', 'blood', 'subtle');
+  panel.classList.add(state.dialogue.color);
+  document.getElementById('dialogue-speaker').textContent =
+    `${d.speaker} · ${d.speaker === 'M-07' ? '로봇' : '경찰'}`;
+  document.getElementById('dialogue-text').textContent = '';
+  document.getElementById('dialogue-text').classList.add('typing');
+  drawDialogueProfile(d.speaker);
+}
+
+function updateDialogueTyping() {
+  const d = state.dialogue;
+  if (!d.typing) return;
+  if (state.time % 2 === 0) {
+    d.charIndex = Math.min(d.fullText.length, d.charIndex + 1);
+    d.text = d.fullText.substring(0, d.charIndex);
+    document.getElementById('dialogue-text').textContent = d.text;
+    if (d.charIndex >= d.fullText.length) {
+      d.typing = false;
+      document.getElementById('dialogue-text').classList.remove('typing');
+    }
+  }
+}
+
+/* ===================== PROFILE FACE (pixel art) ===================== */
+function drawDialogueProfile(speaker) {
+  const canvas = document.getElementById('dialogue-profile');
+  const p = canvas.getContext('2d');
+  p.imageSmoothingEnabled = false;
+  p.fillStyle = '#1A1A24';
+  p.fillRect(0, 0, 64, 64);
+  p.fillStyle = 'rgba(245, 238, 224, 0.03)';
+  for (let y = 0; y < 64; y += 2) p.fillRect(0, y, 64, 1);
+  if (speaker === 'MAREN') drawMarenFace(p);
+  else if (speaker === 'M-07') drawRobotFace(p);
+}
+
+function drawMarenFace(p) {
+  // MAREN — female cop, determined expression
+  // Shoulders (dark coat)
+  p.fillStyle = '#2A2A38';
+  p.fillRect(4, 48, 56, 16);
+  p.fillStyle = '#1E1E28';
+  p.fillRect(4, 60, 56, 4);
+  // Badge (cream star)
+  p.fillStyle = '#FFCE6E';
+  p.fillRect(18, 52, 4, 4);
+  p.fillRect(20, 50, 2, 2);
+  p.fillRect(20, 56, 2, 2);
+  // Neck (softer jaw, thinner than Caleb)
+  p.fillStyle = '#D8A880';
+  p.fillRect(28, 42, 8, 8);
+  p.fillStyle = '#B08050';
+  p.fillRect(28, 48, 8, 2);
+  // Hair — long, framed (falls to shoulders on sides)
+  // Back hair behind head
+  p.fillStyle = '#3A2418';
+  p.fillRect(16, 14, 32, 34);
+  // Side hair flowing down
+  p.fillStyle = '#2A1810';
+  p.fillRect(14, 22, 4, 26);
+  p.fillRect(46, 22, 4, 26);
+  // Hair highlights
+  p.fillStyle = '#4A3020';
+  p.fillRect(18, 18, 2, 20);
+  p.fillRect(44, 18, 2, 20);
+  // Face base (warm skin tone)
+  p.fillStyle = '#E8B890';
+  p.fillRect(22, 18, 20, 26);
+  // Face shadow (right side, softer than Caleb)
+  p.fillStyle = '#C89870';
+  p.fillRect(36, 20, 6, 22);
+  // Jaw highlight (left)
+  p.fillStyle = '#F0C8A0';
+  p.fillRect(22, 18, 4, 22);
+  // Hair bangs (swept to one side)
+  p.fillStyle = '#3A2418';
+  p.fillRect(20, 16, 22, 4);
+  p.fillStyle = '#2A1810';
+  p.fillRect(22, 18, 4, 3);
+  p.fillRect(38, 18, 4, 3);
+  // Sharper female cap — subtle police cap band across forehead
+  p.fillStyle = '#1A1A24';
+  p.fillRect(20, 14, 24, 4);
+  p.fillStyle = '#FFCE6E';
+  p.fillRect(20, 17, 24, 1);  // cream band
+  // Eyes (larger, slight feminine shape)
+  p.fillStyle = '#FFFFFF';
+  p.fillRect(26, 25, 4, 3);
+  p.fillRect(34, 25, 4, 3);
+  // Iris (brown/dark)
+  p.fillStyle = '#3A2418';
+  p.fillRect(27, 26, 2, 2);
+  p.fillRect(35, 26, 2, 2);
+  // Eyelashes (subtle top line)
+  p.fillStyle = '#1A1A24';
+  p.fillRect(26, 24, 4, 1);
+  p.fillRect(34, 24, 4, 1);
+  // Eyebrows (thinner, arched)
+  p.fillStyle = '#2A1810';
+  p.fillRect(26, 22, 4, 1);
+  p.fillRect(34, 22, 4, 1);
+  // Nose (smaller, delicate)
+  p.fillStyle = '#C89870';
+  p.fillRect(31, 29, 2, 4);
+  p.fillStyle = '#A87858';
+  p.fillRect(31, 32, 2, 1);
+  // Mouth — small, slight pink
+  p.fillStyle = '#A04040';
+  p.fillRect(29, 36, 6, 1);
+  p.fillStyle = '#C85858';
+  p.fillRect(30, 36, 4, 1);
+  // Subtle cheek blush
+  p.fillStyle = 'rgba(200, 100, 100, 0.2)';
+  p.fillRect(23, 31, 3, 2);
+  p.fillRect(38, 31, 3, 2);
+  // Ear (partial, peeking through hair)
+  p.fillStyle = '#C89870';
+  p.fillRect(20, 26, 2, 3);
+}
+
+function drawRobotFace(p) {
+  // M-07 — unchanged from before
+  p.fillStyle = '#2A2A38';
+  p.fillRect(6, 48, 52, 16);
+  p.fillStyle = '#14141C';
+  p.fillRect(6, 48, 52, 2);
+  p.fillRect(4, 50, 4, 12);
+  p.fillRect(56, 50, 4, 12);
+  p.fillStyle = '#7CC8D8';
+  p.fillRect(30, 52, 4, 4);
+  p.fillStyle = '#3FA0B8';
+  p.fillRect(30, 54, 4, 1);
+  p.fillStyle = '#14141C';
+  p.fillRect(28, 42, 8, 8);
+  p.fillStyle = '#0A0A12';
+  p.fillRect(28, 44, 8, 1);
+  p.fillRect(28, 46, 8, 1);
+  p.fillStyle = '#2A2A38';
+  p.fillRect(18, 10, 28, 32);
+  p.fillStyle = '#14141C';
+  p.fillRect(18, 10, 28, 3);
+  p.fillStyle = '#1E1E28';
+  p.fillRect(18, 13, 3, 29);
+  p.fillRect(43, 13, 3, 29);
+  p.fillStyle = '#0A0A12';
+  p.fillRect(18, 22, 28, 1);
+  p.fillRect(18, 36, 28, 1);
+  const time = Date.now() / 200;
+  const pulse = 0.75 + 0.25 * Math.sin(time * 0.5);
+  p.fillStyle = `rgba(124, 200, 216, ${pulse})`;
+  p.fillRect(21, 25, 22, 4);
+  p.fillStyle = '#FFFFFF';
+  p.fillRect(28, 26, 8, 2);
+  p.fillStyle = `rgba(124, 200, 216, ${pulse * 0.35})`;
+  p.fillRect(19, 23, 26, 8);
+  p.fillStyle = '#0A0A12';
+  p.fillRect(24, 38, 16, 2);
+  p.fillStyle = '#3A3A48';
+  p.fillRect(25, 38, 1, 2);
+  p.fillRect(28, 38, 1, 2);
+  p.fillRect(31, 38, 1, 2);
+  p.fillRect(34, 38, 1, 2);
+  p.fillRect(37, 38, 1, 2);
+  p.fillStyle = '#14141C';
+  p.fillRect(36, 6, 1, 4);
+  p.fillStyle = '#FFCE6E';
+  p.fillRect(35, 4, 3, 2);
+  p.fillStyle = '#14141C';
+  p.fillRect(20, 15, 2, 2);
+  p.fillRect(42, 15, 2, 2);
+  p.fillRect(20, 39, 2, 2);
+  p.fillRect(42, 39, 2, 2);
+}
+
+/* ===================== ROOM ENTRY & DOOR ===================== */
+function detectRoomAndTriggerDialogue() {
+  const activeChar = state[state.active];
+  const cx = activeChar.x + 7;
+  const cy = activeChar.y + 18;
+  let roomId = null;
+  for (const room of ROOMS) {
+    if (room.hidden && !state.door.open) continue;
+    if (cx >= room.x && cx <= room.x + room.w &&
+        cy >= room.y && cy <= room.y + room.h) {
+      roomId = room.id; break;
+    }
+  }
+  if (roomId && roomId !== state.currentRoom) {
+    state.currentRoom = roomId;
+    const key = `enter_${roomId}`;
+    if (!state.roomEntryFired[roomId] && DIALOGUE[key]) {
+      state.roomEntryFired[roomId] = true;
+      showDialogue(key);
+    }
+  }
+}
+
+function updateDoor() {
+  const d = state.door;
+  if (d.opening && !d.open) {
+    d.openFrame++;
+    if (d.openFrame > 60) {
+      d.open = true;
+      d.opening = false;
+    }
+  }
+}
+
+/* ===================== DISTANCE / AMBUSH ===================== */
+function updateDistance() {
+  const dx = state.cop.x - state.robot.x;
+  const dy = state.cop.y - state.robot.y;
+  state.distance = Math.hypot(dx, dy);
+  let band = 'safe';
+  if (state.distance > CFG.DIST_WARNING) band = 'danger';
+  else if (state.distance > CFG.DIST_SAFE) band = 'warning';
+  state.distanceBand = band;
+
+  state.warningVignette = band === 'warning' ? Math.min(1, state.warningVignette + 0.03) :
+                         band === 'danger'  ? 0 :
+                         Math.max(0, state.warningVignette - 0.04);
+  state.dangerVignette  = band === 'danger'  ? Math.min(1, state.dangerVignette + 0.05) :
+                         Math.max(0, state.dangerVignette - 0.04);
+
+  const sp = document.getElementById('status-panel');
+  sp.classList.remove('warning', 'danger');
+  if (band === 'warning') sp.classList.add('warning');
+  if (band === 'danger') sp.classList.add('danger');
+
+  if (state.ambushCooldown > 0) state.ambushCooldown--;
+  if (band === 'danger' && state.ambushCooldown <= 0 && !state.gameOver) {
+    spawnAmbush();
+    state.ambushCooldown = CFG.AMBUSH_SPAWN_COOLDOWN;
+  }
+}
+
+function spawnAmbush() {
+  const cop = state.cop;
+  let spawnX, spawnY, spawnType;
+  const nearbyDoors = DOORS.filter(d =>
+    Math.abs(d.x - cop.x) < 200 && Math.abs(d.y - cop.y) < 80);
+  if (nearbyDoors.length > 0 && Math.random() < 0.7) {
+    const d = nearbyDoors[Math.floor(Math.random() * nearbyDoors.length)];
+    spawnX = d.x; spawnY = d.y; spawnType = 'humanoid';
+  } else {
+    let nearestW = null, minD = Infinity;
+    for (const w of WINDOWS) {
+      const d = Math.hypot(w.x - cop.x, w.y - cop.y);
+      if (d < minD) { minD = d; nearestW = w; }
+    }
+    if (nearestW) {
+      spawnX = nearestW.x + nearestW.w / 2;
+      spawnY = nearestW.y + nearestW.h / 2;
+      spawnType = 'drone';
+    } else return;
+  }
+  const ambush = {
+    id: 'amb_' + state.time,
+    type: 'ambush_' + spawnType,
+    x: spawnX, y: spawnY,
+    hp: CFG.AMBUSH_HP, alive: true,
+    aimAngle: 0, aimTimer: 0, hitTime: 0,
+    executeTimer: CFG.AMBUSH_EXECUTE_TIME,
+    facing: cop.x > spawnX ? 1 : -1,
+    vx: 0, vy: 0, spawnPhase: 1, spawnFrame: 0,
+  };
+  state.ambushes.push(ambush);
+  showDialogue('ambush');
+}
+
+/* ===================== ENEMY AI ===================== */
+function updateEnemy(e) {
+  if (!e.alive) return;
+  if (e.type === 'humanoid' || e.type === 'ambush_humanoid') {
+    e.vy = (e.vy || 0) + CFG.GRAVITY;
+    if (e.vy > 12) e.vy = 12;
+  }
+  if (e.type.startsWith('ambush_')) updateAmbush(e);
+  else if (e.type === 'humanoid') updateHumanoid(e);
+  else if (e.type === 'drone') updateDrone(e);
+  if (e.hitTime > 0) e.hitTime--;
+}
+
+function updateHumanoid(e) {
+  const eCx = e.x + 7, eCy = e.y + 16;
+  const cop = state.cop, rob = state.robot;
+  const copCx = cop.x + 7, copCy = cop.y + 18;
+  const robCx = rob.x + 7, robCy = rob.y + 18;
+  let target = null, minD = CFG.HUMANOID_LOS_RANGE;
+  const copVisible = !(cop.inCover) && hasLOS(eCx, eCy, copCx, copCy) &&
+    Math.hypot(copCx - eCx, copCy - eCy) < CFG.HUMANOID_LOS_RANGE;
+  if (copVisible) { target = cop; minD = Math.hypot(copCx - eCx, copCy - eCy); }
+  const robotVisible = hasLOS(eCx, eCy, robCx, robCy) &&
+    Math.hypot(robCx - eCx, robCy - eCy) < CFG.HUMANOID_LOS_RANGE && rob.battery > 0;
+  if (robotVisible) {
+    const rd = Math.hypot(robCx - eCx, robCy - eCy);
+    if (!target || rd < minD * 0.7) { target = rob; minD = rd; }
+  }
+  if (target) {
+    e.facing = target.x > e.x ? 1 : -1;
+    e.aimAngle = Math.atan2((target.y + 18) - eCy, (target.x + 7) - eCx);
+    e.aimTimer++;
+    e.alertLevel = 2;
+    if (e.aimTimer > CFG.HUMANOID_AIM_TIME) {
+      fireEnemyBullet(e, target, CFG.HUMANOID_BULLET_SPEED);
+      e.aimTimer = -CFG.HUMANOID_COOLDOWN;
+    }
+  } else {
+    if (e.alertLevel > 0) e.alertLevel -= 0.02;
+    e.aimTimer = Math.max(0, e.aimTimer - 1);
+    if (e.patrol) {
+      e.x += e.patrolDir * 0.4;
+      if (e.x < e.patrol.min) { e.x = e.patrol.min; e.patrolDir = 1; }
+      if (e.x > e.patrol.max) { e.x = e.patrol.max; e.patrolDir = -1; }
+      e.facing = e.patrolDir;
+    }
+  }
+  let newY = e.y + e.vy;
+  for (const p of PLATFORMS) {
+    if (rectOverlap(e.x - 4, newY, 22, 34, p.x, p.y, p.w, p.h)) {
+      if (e.vy >= 0 && e.y + 34 <= p.y + 3) { newY = p.y - 34; e.vy = 0; }
+    }
+  }
+  e.y = newY;
+}
+
+function updateDrone(e) {
+  const eCx = e.x + 8, eCy = e.y + 10;
+  const cop = state.cop, rob = state.robot;
+  const copCx = cop.x + 7, copCy = cop.y + 18;
+  const robCx = rob.x + 7, robCy = rob.y + 18;
+  let target = null, minD = CFG.DRONE_LOS_RANGE;
+  const copVisible = !(cop.inCover) && hasLOS(eCx, eCy, copCx, copCy);
+  if (copVisible) { target = cop; minD = Math.hypot(copCx - eCx, copCy - eCy); }
+  const robotVisible = hasLOS(eCx, eCy, robCx, robCy) && rob.battery > 0;
+  if (robotVisible && (!target || Math.hypot(robCx - eCx, robCy - eCy) < minD * 0.5)) {
+    target = rob; minD = Math.hypot(robCx - eCx, robCy - eCy);
+  }
+  const hoverOsc = Math.sin(state.time * 0.06 + e.x * 0.01) * 2;
+  if (target) {
+    e.facing = target.x > e.x ? 1 : -1;
+    e.aimAngle = Math.atan2((target.y + 18) - eCy, (target.x + 7) - eCx);
+    e.aimTimer++;
+    e.alertLevel = 2;
+    const d = minD;
+    if (d > 120) {
+      const nx = (target.x - e.x) / d;
+      const ny = (target.y - 40 - e.y) / d;
+      e.x += nx * CFG.DRONE_SPEED;
+      e.y += ny * CFG.DRONE_SPEED;
+    } else if (d < 80) {
+      const nx = (e.x - target.x) / d;
+      e.x += nx * 0.5;
+    }
+    if (e.aimTimer > CFG.DRONE_AIM_TIME) {
+      fireEnemyBullet(e, target, CFG.DRONE_BULLET_SPEED);
+      e.aimTimer = -CFG.DRONE_COOLDOWN;
+    }
+  } else {
+    if (e.alertLevel > 0) e.alertLevel -= 0.02;
+    e.aimTimer = Math.max(0, e.aimTimer - 1);
+    if (e.patrol) {
+      e.x += e.patrolDir * 0.5;
+      if (e.x < e.patrol.min) { e.x = e.patrol.min; e.patrolDir = 1; }
+      if (e.x > e.patrol.max) { e.x = e.patrol.max; e.patrolDir = -1; }
+    }
+    e.y = e.hoverY + hoverOsc;
+  }
+}
+
+function updateAmbush(e) {
+  if (e.spawnPhase === 1) {
+    e.spawnFrame++;
+    if (e.spawnFrame > 30) e.spawnPhase = 2;
+    return;
+  }
+  const cop = state.cop;
+  const eCx = e.x + 7, eCy = e.y + 16;
+  const copCx = cop.x + 7, copCy = cop.y + 18;
+  const dToCop = Math.hypot(copCx - eCx, copCy - eCy);
+  if (dToCop > 50) {
+    const nx = (copCx - eCx) / dToCop;
+    if (e.type === 'ambush_drone') {
+      const ny = (copCy - 20 - eCy) / Math.hypot(copCx - eCx, copCy - 20 - eCy);
+      e.x += nx * 1.8; e.y += ny * 1.8;
+    } else {
+      e.x += nx * 1.5;
+      e.vy = (e.vy || 0) + CFG.GRAVITY;
+      let newY = e.y + e.vy;
+      for (const p of PLATFORMS) {
+        if (rectOverlap(e.x - 4, newY, 22, 34, p.x, p.y, p.w, p.h)) {
+          if (e.vy >= 0 && e.y + 34 <= p.y + 3) { newY = p.y - 34; e.vy = 0; }
+        }
+      }
+      e.y = newY;
+    }
+    e.facing = nx > 0 ? 1 : -1;
+  }
+  e.aimAngle = Math.atan2(copCy - eCy, copCx - eCx);
+  e.aimTimer += 2;
+  if (e.aimTimer > CFG.HUMANOID_AIM_TIME * 0.6) {
+    fireEnemyBullet(e, cop, CFG.HUMANOID_BULLET_SPEED);
+    e.aimTimer = -40;
+  }
+  e.executeTimer--;
+  if (dToCop < 20) {
+    state.cop.hp -= CFG.AMBUSH_DAMAGE_COP;
+    state.cop.hitTime = 18;
+    e.alive = false;
+    spawnParticles(e.x, e.y, '#A8302A', 15);
+    if (state.cop.hp <= 0) { state.cop.hp = 0; endGame(false); }
+  }
+}
+
+function fireEnemyBullet(e, target, speed) {
+  const sx = e.x + 7, sy = e.y + 16;
+  const dx = (target.x + 7) - sx, dy = (target.y + 16) - sy;
+  const d = Math.hypot(dx, dy);
+  if (d < 1) return;
+  const nx = dx / d, ny = dy / d;
+  state.bullets.push({
+    x: sx + nx * 10, y: sy + ny * 10,
+    vx: nx * speed, vy: ny * speed,
+    owner: 'enemy', life: 100, trail: [],
+  });
+}
+
+/* ===================== BULLETS ===================== */
+function updateBullets() {
+  for (const b of state.bullets) {
+    b.trail.push({ x: b.x, y: b.y });
+    if (b.trail.length > 5) b.trail.shift();
+    b.x += b.vx; b.y += b.vy; b.life--;
+    if (b.life <= 0) { b.dead = true; continue; }
+
+    let hit = false;
+    for (const w of WALLS) {
+      if (rectOverlap(b.x - 1, b.y - 1, 2, 2, w.x, w.y, w.w, w.h)) {
+        b.dead = true; hit = true;
+        spawnParticles(b.x, b.y, b.owner === 'robot' ? '#FFCE6E' : '#A8302A', 4);
+        break;
+      }
+    }
+    if (hit) continue;
+    // Closed door blocks
+    if (!state.door.open) {
+      const d = state.door;
+      if (rectOverlap(b.x - 1, b.y - 1, 2, 2, d.x, d.y, d.w, d.h)) {
+        b.dead = true;
+        spawnParticles(b.x, b.y, b.owner === 'robot' ? '#FFCE6E' : '#A8302A', 4);
+        continue;
+      }
+    }
+    for (const p of PLATFORMS) {
+      if (p.type === 'floor' && p.h > 20) {
+        if (rectOverlap(b.x - 1, b.y - 1, 2, 2, p.x, p.y, p.w, p.h)) {
+          b.dead = true; hit = true;
+          spawnParticles(b.x, b.y, b.owner === 'robot' ? '#FFCE6E' : '#A8302A', 4);
+          break;
+        }
+      }
+    }
+    if (hit) continue;
+
+    // COVERS — only enemy bullets blocked. Robot bullets pass through.
+    if (b.owner !== 'robot') {
+      let hitCover = false;
+      for (const c of state.covers) {
+        if (c.destroyed) continue;
+        if (rectOverlap(b.x - 1, b.y - 1, 2, 2, c.x, c.y, c.w, c.h)) {
+          c.hp -= 1 * CFG.COVER_DAMAGE_MULT;
+          b.dead = true; hitCover = true;
+          spawnParticles(b.x, b.y, '#8A6040', 5);
+          if (c.hp <= 0) {
+            c.destroyed = true;
+            spawnParticles(c.x + c.w / 2, c.y + c.h / 2, '#6A4832', 20);
+            if (state.cop.inCover === c) state.cop.inCover = null;
+          }
+          break;
+        }
+      }
+      if (hitCover) continue;
+    }
+
+    if (b.owner === 'robot') {
+      for (const e of [...state.enemies, ...state.ambushes]) {
+        if (!e.alive) continue;
+        if (rectOverlap(b.x - 1, b.y - 1, 2, 2, e.x - 4, e.y, 22, 34)) {
+          e.hp -= CFG.ROBOT_DAMAGE; e.hitTime = 8; b.dead = true;
+          spawnParticles(b.x, b.y, '#FFCE6E', 5);
+          if (e.hp <= 0) {
+            e.alive = false;
+            if (!e.type.startsWith('ambush_')) state.enemiesKilled++;
+            spawnParticles(e.x + 7, e.y + 16, '#A8302A', 14);
+            checkRoomCleared();
+          }
+          break;
+        }
+      }
+    } else {
+      if (rectOverlap(b.x - 1, b.y - 1, 2, 2, state.cop.x, state.cop.y, CFG.COP_W, CFG.COP_H)) {
+        if (!state.cop.inCover) {
+          state.cop.hp -= CFG.HUMANOID_DAMAGE_COP;
+          state.cop.hitTime = 12; b.dead = true;
+          spawnParticles(b.x, b.y, '#A8302A', 6);
+          if (state.cop.hp <= 0) { state.cop.hp = 0; endGame(false); }
+        }
+      } else if (rectOverlap(b.x - 1, b.y - 1, 2, 2, state.robot.x, state.robot.y, CFG.ROBOT_W, CFG.ROBOT_H)) {
+        state.robot.battery = Math.max(0, state.robot.battery - CFG.HUMANOID_DAMAGE_ROBOT);
+        state.robot.hitTime = 10; b.dead = true;
+        spawnParticles(b.x, b.y, '#A8302A', 6);
+      }
+    }
+  }
+  state.bullets = state.bullets.filter(b => !b.dead);
+}
+
+function spawnParticles(x, y, color, n) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const s = 0.5 + Math.random() * 1.5;
+    state.particles.push({
+      x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 1,
+      size: 1 + Math.random() * 1.5,
+      life: 20 + Math.random() * 15, maxLife: 35, color,
+    });
+  }
+}
+
+function updateParticles() {
+  for (const p of state.particles) {
+    p.x += p.vx; p.y += p.vy; p.vy += 0.15;
+    p.life--;
+  }
+  state.particles = state.particles.filter(p => p.life > 0);
+}
+
+function checkRoomCleared() {
+  let anyNewlyCleared = false;
+  for (const room of ROOMS) {
+    if (state.clearedRooms[room.id]) continue;
+    const alive = state.enemies.filter(e => e.room === room.id && e.alive).length;
+    const total = state.enemies.filter(e => e.room === room.id).length;
+    if (total > 0 && alive === 0) {
+      state.clearedRooms[room.id] = true;
+      anyNewlyCleared = true;
+    }
+  }
+  if (anyNewlyCleared) showDialogue('room_cleared');
+}
+
+function endGame(won) {
+  state.gameOver = true;
+  state.won = won;
+  setTimeout(() => {
+    const screen = document.getElementById('end-screen');
+    const title = document.getElementById('end-title');
+    const label = document.getElementById('end-label');
+    const msg = document.getElementById('end-msg');
+    if (won) {
+      label.textContent = 'CASE ADVANCED';
+      title.textContent = '동부 23번지 · 타코';
+      title.style.color = '#6A4832';
+      msg.textContent = '쪽지 확보. 다음 현장으로.';
+    } else {
+      label.textContent = 'MISSION FAILED';
+      title.textContent = 'MAREN DOWN';
+      title.style.color = '#A8302A';
+      msg.textContent = '경찰이 사망했습니다.';
+    }
+    screen.style.display = 'flex';
+  }, 1500);
+}
+
+function updateCamera() {
+  const midX = (state.cop.x + state.robot.x) / 2;
+  const targetX = midX - CFG.VIEW_W / 2;
+  state.camera.x += (targetX - state.camera.x) * 0.08;
+  state.camera.x = Math.max(0, Math.min(CFG.WORLD_W - CFG.VIEW_W, state.camera.x));
+  state.camera.y = 0;
+}
+
+function update() {
+  if (state.gameOver) return;
+  state.time++;
+  if (justPressed.switch) switchUnit();
+
+  updateRobot();
+  updateCop();
+  for (const e of state.enemies) updateEnemy(e);
+  for (const e of state.ambushes) updateEnemy(e);
+  state.ambushes = state.ambushes.filter(a => a.alive);
+  updateBullets();
+  updateParticles();
+  updateDistance();
+  updateCamera();
+  updateDoor();
+  detectRoomAndTriggerDialogue();
+  checkAutoClues();
+  updateDialogueTyping();
+
+  if (state.robot.battery < 25 && !state.lowBatteryFired) {
+    state.lowBatteryFired = true;
+    showDialogue('low_battery');
+  }
+  if (state.robot.battery > 40 && state.lowBatteryFired) state.lowBatteryFired = false;
+  if (state.distanceBand === 'danger' && !state.dangerFired) {
+    state.dangerFired = true;
+    showDialogue('danger');
+  }
+  if (state.distanceBand !== 'danger') state.dangerFired = false;
+  if (state.cop.isCharging && !state.chargingFired) {
+    state.chargingFired = true;
+    showDialogue('charging');
+  }
+  if (!state.cop.isCharging) state.chargingFired = false;
+
+  for (const d of state.dust) {
+    d.x += d.vx; d.y += d.vy;
+    if (d.x < 0) d.x = CFG.WORLD_W;
+    if (d.x > CFG.WORLD_W) d.x = 0;
+    if (d.y < 80) d.y = 400;
+    if (d.y > 400) d.y = 80;
+  }
+
+  for (const k in justPressed) delete justPressed[k];
+  updateHUD();
+}
+
+function updateHUD() {
+  document.getElementById('robot-bat').style.width =
+    (state.robot.battery / CFG.ROBOT_BATTERY_MAX * 100) + '%';
+  document.getElementById('cop-hp').style.width =
+    (state.cop.hp / CFG.COP_HP_MAX * 100) + '%';
+  const distEl = document.getElementById('distance');
+  distEl.textContent = `${Math.round(state.distance)} · ${state.distanceBand.toUpperCase()}`;
+  distEl.style.color =
+    state.distanceBand === 'danger' ? '#A8302A' :
+    state.distanceBand === 'warning' ? '#D88A4A' : '';
+  document.getElementById('enemy-count').textContent =
+    `${state.enemiesKilled} / ${state.enemies.length}`;
+  document.getElementById('evidence-count').textContent =
+    `${state.investigationCount} / 4`;
+}
+
+/* ===================== RENDER ===================== */
+function render() {
+  const bg = ctx.createLinearGradient(0, 0, 0, CFG.VIEW_H);
+  bg.addColorStop(0, '#DEE3E8');
+  bg.addColorStop(0.4, '#E8DFCC');
+  bg.addColorStop(1, '#D4C4A8');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, CFG.VIEW_W, CFG.VIEW_H);
+
+  ctx.save();
+  const pxBg = -state.camera.x * 0.2;
+  ctx.fillStyle = 'rgba(90, 74, 60, 0.18)';
+  for (let i = 0; i < 40; i++) {
+    const tx = (i * 100 + 40 + pxBg) % (CFG.WORLD_W + 200);
+    const th = 40 + (i % 3) * 20;
+    ctx.fillRect(tx - 6, CFG.VIEW_H - 80 - th, 12, th);
+    ctx.beginPath();
+    ctx.arc(tx, CFG.VIEW_H - 80 - th, 18, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(-state.camera.x, -state.camera.y);
+
+  drawHouseExterior();
+  drawRoomFloors();
+  drawBackWalls();
+  drawWindows();
+  drawSunlightBeams();
+  drawStairs();
+  drawWalls();
+  drawHiddenDoor();
+  drawCovers();
+  drawDoors();
+  drawRoomLabels();
+  drawBloodClues();      // bloodstains on floor
+  drawDragTrail();        // upper hall drag marks
+  drawBody();             // only visible when door opened
+
+  for (const e of state.enemies) if (e.alive) drawEnemy(e);
+  for (const e of state.ambushes) if (e.alive) drawAmbush(e);
+  drawRobot();
+  drawCop();
+  drawEnemyAimTelegraphs();
+  drawAimLine();
+  drawBullets();
+  drawParticles();
+  drawBatteryTransferEffect();
+  drawDistanceTether();
+  drawDust();
+
+  ctx.restore();
+
+  drawHUDOverlay();
+  drawDistanceVignettes();
+  drawVignette();
+}
+
+function drawHouseExterior() {
+  ctx.fillStyle = '#A89778';
+  ctx.fillRect(0, ROOF_TOP, 10, FLOOR_1F + 100 - ROOF_TOP);
+  ctx.fillRect(1590, ROOF_TOP, 10, FLOOR_1F + 100 - ROOF_TOP);
+  ctx.fillStyle = '#C4B490';
+  ctx.fillRect(0, FLOOR_1F + 100 - 50, CFG.WORLD_W, 100);
+  ctx.fillStyle = '#3A4550';
+  ctx.beginPath();
+  ctx.moveTo(0, 90);
+  ctx.lineTo(800, 30);
+  ctx.lineTo(1600, 90);
+  ctx.lineTo(1600, ROOF_TOP + 5);
+  ctx.lineTo(0, ROOF_TOP + 5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255, 250, 240, 0.55)';
+  ctx.beginPath();
+  ctx.moveTo(0, 82);
+  ctx.lineTo(800, 22);
+  ctx.lineTo(1600, 82);
+  ctx.lineTo(1580, 86);
+  ctx.lineTo(800, 28);
+  ctx.lineTo(20, 86);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawRoomFloors() {
+  for (const r of ROOMS) {
+    if (r.hidden && !state.door.open) continue;
+    ctx.fillStyle = r.wall;
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.fillStyle = r.floor;
+    const fH = 10;
+    ctx.fillRect(r.x, r.y + r.h - fH, r.w, fH);
+    ctx.fillStyle = 'rgba(90, 74, 60, 0.3)';
+    for (let x = r.x + 20; x < r.x + r.w; x += 24) {
+      ctx.fillRect(x, r.y + r.h - fH, 0.7, fH);
+    }
+    ctx.fillStyle = 'rgba(90, 74, 60, 0.35)';
+    ctx.fillRect(r.x, r.y + r.h - fH - 1, r.w, 1);
+  }
+}
+
+function drawBackWalls() {
+  for (const r of ROOMS) {
+    if (r.hidden && !state.door.open) continue;
+    ctx.fillStyle = 'rgba(168, 152, 120, 0.18)';
+    for (let x = r.x + 10; x < r.x + r.w - 10; x += 18) {
+      ctx.fillRect(x, r.y + 2, 0.6, r.h - 14);
+    }
+  }
+}
+
+function drawWindows() {
+  for (const w of WINDOWS) {
+    ctx.fillStyle = '#3A2E28';
+    ctx.fillRect(w.x - 3, w.y - 3, w.w + 6, w.h + 6);
+    const g = ctx.createLinearGradient(w.x, w.y, w.x, w.y + w.h);
+    g.addColorStop(0, '#DEE3E8');
+    g.addColorStop(0.55, '#F0E8D8');
+    g.addColorStop(1, '#FAF3E0');
+    ctx.fillStyle = g;
+    ctx.fillRect(w.x, w.y, w.w, w.h);
+    ctx.fillStyle = 'rgba(74, 62, 52, 0.3)';
+    ctx.fillRect(w.x + 8, w.y + w.h * 0.3, 2, w.h * 0.35);
+    ctx.fillRect(w.x + 20, w.y + w.h * 0.4, 2, w.h * 0.3);
+    ctx.fillStyle = '#3A2E28';
+    ctx.fillRect(w.x + w.w / 2 - 0.5, w.y, 1, w.h);
+    ctx.fillRect(w.x, w.y + w.h / 2 - 0.5, w.w, 1);
+    ctx.fillStyle = '#6A4832';
+    ctx.fillRect(w.x - 4, w.y + w.h + 2, w.w + 8, 3);
+  }
+}
+
+function drawSunlightBeams() {
+  for (const w of WINDOWS) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    const beamDx = 40, beamLen = 180;
+    const cx = w.x + w.w / 2, cy = w.y + w.h / 2;
+    const g = ctx.createLinearGradient(cx, cy, cx + beamDx, cy + beamLen);
+    g.addColorStop(0, 'rgba(255, 230, 170, 0.35)');
+    g.addColorStop(0.7, 'rgba(255, 220, 150, 0.15)');
+    g.addColorStop(1, 'rgba(255, 220, 150, 0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(cx - w.w / 2, cy - w.h / 2);
+    ctx.lineTo(cx + w.w / 2, cy - w.h / 2);
+    ctx.lineTo(cx + w.w / 2 + beamDx + 10, cy + beamLen);
+    ctx.lineTo(cx - w.w / 2 + beamDx - 10, cy + beamLen);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+function drawStairs() {
+  // Right-corner stair
+  ctx.fillStyle = '#8A7B62';
+  ctx.beginPath();
+  ctx.moveTo(1280, FLOOR_1F);
+  ctx.lineTo(1280, 380);
+  ctx.lineTo(1305, 380); ctx.lineTo(1305, 356);
+  ctx.lineTo(1330, 356); ctx.lineTo(1330, 332);
+  ctx.lineTo(1355, 332); ctx.lineTo(1355, 308);
+  ctx.lineTo(1380, 308); ctx.lineTo(1380, 284);
+  ctx.lineTo(1405, 284); ctx.lineTo(1405, FLOOR_1F);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#A89777';
+  for (const p of PLATFORMS) {
+    if (p.type === 'step') ctx.fillRect(p.x, p.y, p.w, 2);
+  }
+  ctx.strokeStyle = '#3A2E28';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(1280, 340);
+  ctx.lineTo(1405, 248);
+  ctx.stroke();
+  // Hint arrow at bottom of stairs
+  if (!state.clearedRooms.bedroom) {
+    const pulse = 0.4 + 0.3 * Math.sin(state.time * 0.08);
+    ctx.fillStyle = `rgba(216, 138, 74, ${pulse})`;
+    ctx.font = 'bold 10px "IBM Plex Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('▲ 위층', 1340, FLOOR_1F - 14);
+  }
+}
+
+function drawWalls() {
+  for (const w of WALLS) {
+    if (w.type === 'outer' || w.type === 'roof') continue;
+    if (w.type === 'inner') {
+      ctx.fillStyle = '#B8A588';
+      ctx.fillRect(w.x, w.y, w.w, w.h);
+      ctx.fillStyle = '#D8C8AA';
+      ctx.fillRect(w.x, w.y, 1, w.h);
+    }
+  }
+}
+
+function drawHiddenDoor() {
+  const d = state.door;
+  if (d.open) return;
+  // Opening animation — door swings inward
+  const openT = d.opening ? d.openFrame / 60 : 0;
+  // Door frame (stays)
+  ctx.fillStyle = '#3A2418';
+  ctx.fillRect(d.x - 2, d.y - 2, d.w + 4, d.h + 4);
+  // Door panel
+  ctx.save();
+  const ox = d.x + d.w / 2;
+  const oy = d.y + d.h / 2;
+  ctx.translate(ox, oy);
+  ctx.rotate(openT * Math.PI * 0.4);  // swing inward
+  ctx.fillStyle = '#6A4832';
+  ctx.fillRect(-d.w / 2, -d.h / 2, d.w, d.h);
+  // Wood grain
+  ctx.fillStyle = '#4A3020';
+  ctx.fillRect(-d.w / 2, -d.h / 2 + 8, d.w, 1);
+  ctx.fillRect(-d.w / 2, -d.h / 2 + 20, d.w, 1);
+  ctx.fillRect(-d.w / 2, -d.h / 2 + 34, d.w, 1);
+  // Handle
+  ctx.fillStyle = '#FFCE6E';
+  ctx.beginPath();
+  ctx.arc(d.w / 2 - 3, 0, 1.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  // "F 로 문 열기" hint when cop is nearby
+  const cx = state.cop.x + CFG.COP_W / 2;
+  const dcx = d.x + d.w / 2;
+  if (!d.opening && Math.abs(cx - dcx) < 50 && state.active === 'cop') {
+    const pulse = 0.6 + 0.4 * Math.sin(state.time * 0.15);
+    ctx.fillStyle = `rgba(216, 138, 74, ${pulse})`;
+    ctx.font = 'bold 9px "IBM Plex Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('[F] 문 열기', dcx, d.y - 6);
+  }
+}
+
+function drawDoors() {
+  for (const d of DOORS) {
+    ctx.fillStyle = '#3A2E28';
+    ctx.fillRect(d.x - 10, d.y, 20, 60);
+    ctx.fillStyle = '#5A4230';
+    ctx.fillRect(d.x - 8, d.y + 2, 16, 56);
+    ctx.fillStyle = '#FFCE6E';
+    ctx.beginPath();
+    ctx.arc(d.x + (d.dir === 'right' ? 5 : -5), d.y + 30, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#2A1E18';
+    ctx.fillRect(d.x - 12, d.y - 2, 24, 3);
+  }
+}
+
+function drawCovers() {
+  for (const c of state.covers) {
+    if (c.destroyed) continue;
+    switch (c.kind) {
+      case 'sofa': drawSofa(c); break;
+      case 'shelf': case 'bookcase': drawShelf(c); break;
+      case 'counter': drawCounter(c); break;
+      case 'fridge': drawFridge(c); break;
+      case 'dining_flipped': drawDiningFlipped(c); break;
+      case 'plant': drawPlant(c); break;
+      case 'desk': drawDesk(c); break;
+    }
+    const hp = c.hp / c.integrity;
+    if (hp < 1) {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+      ctx.fillRect(c.x, c.y - 8, c.w, 3);
+      ctx.fillStyle = hp > 0.5 ? '#7CC8D8' : hp > 0.25 ? '#D88A4A' : '#A8302A';
+      ctx.fillRect(c.x, c.y - 8, c.w * hp, 3);
+    }
+  }
+}
+
+function drawSofa(c) {
+  ctx.fillStyle = '#D8C49C';
+  ctx.fillRect(c.x, c.y + 8, c.w, c.h - 8);
+  ctx.fillStyle = '#E8D4B0';
+  ctx.fillRect(c.x, c.y, c.w, 12);
+  ctx.fillStyle = '#F0E0C4';
+  ctx.fillRect(c.x, c.y, c.w, 2);
+  ctx.fillStyle = '#E0CCA4';
+  ctx.fillRect(c.x - 3, c.y + 4, 5, c.h - 4);
+  ctx.fillRect(c.x + c.w - 2, c.y + 4, 5, c.h - 4);
+}
+
+function drawShelf(c) {
+  ctx.fillStyle = '#6A4832';
+  ctx.fillRect(c.x, c.y, c.w, c.h);
+  ctx.fillStyle = '#4A3020';
+  ctx.fillRect(c.x, c.y, c.w, 2);
+  const shelves = Math.floor(c.h / 20);
+  const colors = ['#8A2420', '#3A4550', '#C8BDA8', '#6A4832', '#A88A50'];
+  for (let s = 0; s < shelves; s++) {
+    const sy = c.y + (c.h / shelves) * s + 3;
+    const sh = c.h / shelves - 5;
+    let bx = c.x + 2;
+    for (let i = 0; i < 20; i++) {
+      const col = colors[(s * 3 + i) % colors.length];
+      const bw = 2 + (i % 3);
+      if (bx + bw > c.x + c.w - 2) break;
+      ctx.fillStyle = col;
+      ctx.fillRect(bx, sy, bw, sh);
+      bx += bw + 0.5;
+    }
+  }
+}
+
+function drawDiningFlipped(c) {
+  // Overturned dining table — evidence of struggle
+  ctx.fillStyle = '#6A4832';
+  ctx.fillRect(c.x, c.y + 4, c.w, 4);   // table edge (thin, as if on its side)
+  ctx.fillStyle = '#8A6040';
+  ctx.fillRect(c.x, c.y + 4, c.w, 1);
+  // Legs sticking up (chaos)
+  ctx.fillStyle = '#3A2E28';
+  ctx.fillRect(c.x + 6, c.y - 12, 3, 16);
+  ctx.fillRect(c.x + c.w - 9, c.y - 10, 3, 14);
+  ctx.fillRect(c.x + c.w / 2 - 2, c.y - 14, 3, 18);
+  // Broken glass scattered around
+  ctx.fillStyle = 'rgba(222, 227, 232, 0.8)';
+  ctx.beginPath();
+  ctx.moveTo(c.x + c.w + 4, c.y + 12);
+  ctx.lineTo(c.x + c.w + 8, c.y + 10);
+  ctx.lineTo(c.x + c.w + 10, c.y + 14);
+  ctx.closePath(); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(c.x - 5, c.y + 14);
+  ctx.lineTo(c.x - 8, c.y + 12);
+  ctx.lineTo(c.x - 6, c.y + 16);
+  ctx.closePath(); ctx.fill();
+}
+
+function drawCounter(c) {
+  ctx.fillStyle = '#A89A7E';
+  ctx.fillRect(c.x, c.y + 3, c.w, c.h - 3);
+  ctx.fillStyle = '#D4C8B0';
+  ctx.fillRect(c.x, c.y, c.w, 4);
+  ctx.fillStyle = '#E8DFC0';
+  ctx.fillRect(c.x, c.y, c.w, 1);
+  const doors = Math.floor(c.w / 40);
+  ctx.fillStyle = 'rgba(90, 74, 60, 0.45)';
+  for (let i = 1; i < doors; i++) {
+    ctx.fillRect(c.x + (c.w / doors) * i, c.y + 6, 1, c.h - 9);
+  }
+  const sW = Math.min(40, c.w * 0.3);
+  const sX = c.x + c.w / 2 - sW / 2;
+  ctx.fillStyle = '#6A6A70';
+  ctx.fillRect(sX, c.y - 2, sW, 4);
+  ctx.fillStyle = '#C8C8CC';
+  ctx.fillRect(sX + sW / 2 - 1, c.y - 6, 2, 4);
+}
+
+function drawFridge(c) {
+  ctx.fillStyle = '#E8DFC8';
+  ctx.fillRect(c.x, c.y, c.w, c.h);
+  ctx.fillStyle = '#F0E8D8';
+  ctx.fillRect(c.x, c.y, c.w, 2);
+  ctx.fillStyle = '#C8BDA8';
+  ctx.fillRect(c.x, c.y + c.h * 0.3, c.w, 1.2);
+  ctx.fillStyle = '#3A2E28';
+  ctx.fillRect(c.x + c.w - 5, c.y + 5, 2, 8);
+  ctx.fillRect(c.x + c.w - 5, c.y + c.h * 0.3 + 6, 2, 8);
+}
+
+function drawPlant(c) {
+  ctx.fillStyle = '#6A4832';
+  ctx.fillRect(c.x + 4, c.y + c.h - 14, c.w - 8, 14);
+  ctx.fillStyle = '#4A6A38';
+  ctx.beginPath();
+  ctx.ellipse(c.x + c.w / 2, c.y + 8, c.w / 2, 10, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawDesk(c) {
+  ctx.fillStyle = '#6A4832';
+  ctx.fillRect(c.x, c.y, c.w, 4);
+  ctx.fillStyle = '#8A6040';
+  ctx.fillRect(c.x, c.y, c.w, 1.5);
+  ctx.fillStyle = '#5A3A28';
+  ctx.fillRect(c.x + c.w - 22, c.y + 4, 22, c.h - 4);
+  ctx.fillStyle = '#3A2E28';
+  ctx.fillRect(c.x + 3, c.y + 4, 3, c.h - 4);
+}
+
+/* Environmental blood stain clue (기) */
+function drawBloodClues() {
+  if (state.investigated.blood_dry) {
+    // After found — faded indication
+    ctx.fillStyle = 'rgba(138, 48, 40, 0.4)';
+  } else {
+    ctx.fillStyle = '#6A1818';  // dark dried blood
+  }
+  // Dried blood pool on floor of living room
+  ctx.beginPath();
+  ctx.ellipse(200, FLOOR_1F - 3, 14, 3, 0.1, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(58, 20, 16, 0.8)';
+  ctx.beginPath();
+  ctx.ellipse(200, FLOOR_1F - 3, 9, 1.8, 0.1, 0, Math.PI * 2);
+  ctx.fill();
+  // Smaller droplets
+  ctx.fillStyle = '#6A1818';
+  ctx.beginPath(); ctx.arc(215, FLOOR_1F - 5, 1.8, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(225, FLOOR_1F - 4, 1.2, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(190, FLOOR_1F - 4, 1, 0, Math.PI * 2); ctx.fill();
+
+  // Hint indicator if close
+  if (!state.investigated.blood_dry && state.active === 'cop') {
+    const cpx = state.cop.x + CFG.COP_W / 2;
+    if (Math.abs(cpx - 200) < 80) {
+      const pulse = 0.4 + 0.3 * Math.sin(state.time * 0.1);
+      ctx.fillStyle = `rgba(216, 138, 74, ${pulse})`;
+      ctx.font = 'bold 9px "IBM Plex Mono", monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('?', 200, FLOOR_1F - 16);
+    }
+  }
+}
+
+/* Drag trail on upper floor (전) */
+function drawDragTrail() {
+  ctx.strokeStyle = 'rgba(90, 20, 16, 0.55)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(800, FLOOR_2F - 3);
+  ctx.lineTo(1378, FLOOR_2F - 5);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(60, 10, 10, 0.35)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(820, FLOOR_2F - 1);
+  ctx.lineTo(1378, FLOOR_2F - 3);
+  ctx.stroke();
+  // Blood drops along the trail
+  ctx.fillStyle = '#6A1818';
+  for (let x = 900; x < 1380; x += 70) {
+    ctx.beginPath();
+    ctx.arc(x, FLOOR_2F - 4, 1.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Hint
+  if (!state.investigated.drag_trail && state.active === 'cop' && state.clearedRooms.upperL) {
+    const cpx = state.cop.x + CFG.COP_W / 2;
+    const cpy = state.cop.y;
+    if (Math.abs(cpx - 1200) < 80 && cpy < FLOOR_2F) {
+      const pulse = 0.4 + 0.3 * Math.sin(state.time * 0.1);
+      ctx.fillStyle = `rgba(216, 138, 74, ${pulse})`;
+      ctx.font = 'bold 9px "IBM Plex Mono", monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('?', 1200, FLOOR_2F - 18);
+    }
+  }
+}
+
+/* Body in hidden room (결) — only visible when door is open */
+function drawBody() {
+  if (!state.door.open) return;
+  const bx = 1500, by = FLOOR_2F - 8;
+  // Body shape (lying on floor, slumped)
+  // Shadow
+  ctx.fillStyle = 'rgba(20, 10, 8, 0.6)';
+  ctx.fillRect(bx - 22, by - 2, 46, 5);
+  // Torso
+  ctx.fillStyle = '#3A2E28';
+  ctx.fillRect(bx - 18, by - 6, 36, 6);
+  // Shirt (bloody)
+  ctx.fillStyle = '#5A1818';
+  ctx.fillRect(bx - 16, by - 5, 32, 5);
+  // Legs
+  ctx.fillStyle = '#2A2A38';
+  ctx.fillRect(bx + 12, by - 3, 18, 3);
+  // Head (turned to side)
+  ctx.fillStyle = '#C89870';
+  ctx.beginPath();
+  ctx.arc(bx - 22, by - 4, 4, 0, Math.PI * 2);
+  ctx.fill();
+  // Hair
+  ctx.fillStyle = '#2A1810';
+  ctx.fillRect(bx - 26, by - 8, 6, 4);
+  // Arm outstretched
+  ctx.fillStyle = '#3A2E28';
+  ctx.fillRect(bx - 8, by - 2, 16, 3);
+  // Blood pool
+  ctx.fillStyle = '#6A1818';
+  ctx.beginPath();
+  ctx.ellipse(bx, by + 1, 28, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#3A0A0A';
+  ctx.beginPath();
+  ctx.ellipse(bx, by + 1, 18, 2.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Hint to inspect
+  if (!state.investigated.body && state.active === 'cop') {
+    const cpx = state.cop.x + CFG.COP_W / 2;
+    if (Math.abs(cpx - bx) < 60) {
+      const pulse = 0.6 + 0.4 * Math.sin(state.time * 0.12);
+      ctx.fillStyle = `rgba(168, 48, 42, ${pulse})`;
+      ctx.font = 'bold 10px "IBM Plex Mono", monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('[F] 조사', bx, by - 18);
+    }
+  } else if (state.investigated.body && !state.investigated.note && state.active === 'cop') {
+    const cpx = state.cop.x + CFG.COP_W / 2;
+    if (Math.abs(cpx - bx) < 60) {
+      const pulse = 0.6 + 0.4 * Math.sin(state.time * 0.12);
+      ctx.fillStyle = `rgba(216, 138, 74, ${pulse})`;
+      ctx.font = 'bold 10px "IBM Plex Mono", monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('[F] 주머니 확인', bx, by - 18);
+    }
+  }
+}
+
+function drawRoomLabels() {
+  ctx.save();
+  ctx.font = 'bold 9px "IBM Plex Mono", monospace';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  for (const room of ROOMS) {
+    if (room.hidden && !state.door.open) continue;
+    const enemiesHere = state.enemies.filter(e => e.room === room.id && e.alive).length;
+    ctx.fillStyle = 'rgba(245, 238, 224, 0.85)';
+    const label = `${room.label.toUpperCase()}${enemiesHere > 0 ? ` · 적 ${enemiesHere}` : ''}`;
+    const lw = ctx.measureText(label).width + 10;
+    ctx.fillRect(room.x + 4, room.y + 4, lw, 12);
+    ctx.fillStyle = enemiesHere > 0 ? '#A8302A' : '#6A4832';
+    ctx.fillText(label, room.x + 9, room.y + 6);
+  }
+  ctx.restore();
+}
+
+function drawDistanceTether() {
+  const r = state.robot, c = state.cop;
+  const rx = r.x + CFG.ROBOT_W / 2;
+  const ry = r.y + CFG.ROBOT_H / 2;
+  const cx = c.x + CFG.COP_W / 2;
+  const cy = c.y + CFG.COP_H / 2;
+  let col;
+  if (state.distanceBand === 'safe') col = 'rgba(124, 200, 216, 0.25)';
+  else if (state.distanceBand === 'warning') col = 'rgba(216, 138, 74, 0.45)';
+  else col = 'rgba(168, 48, 42, 0.7)';
+  ctx.strokeStyle = col;
+  ctx.lineWidth = 1.2;
+  ctx.setLineDash([4, 5]);
+  ctx.beginPath();
+  ctx.moveTo(rx, ry);
+  ctx.lineTo(cx, cy);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function drawBatteryTransferEffect() {
+  const c = state.cop;
+  if (!c.isCharging) {
+    if (state.active === 'cop') {
+      const dist = Math.hypot(c.x - state.robot.x, c.y - state.robot.y);
+      if (dist < CFG.CHARGE_DIST && state.robot.battery < CFG.ROBOT_BATTERY_MAX - 1) {
+        const cx = c.x + CFG.COP_W / 2;
+        const cy = c.y;
+        const pulse = 0.5 + 0.5 * Math.sin(state.time * 0.15);
+        ctx.fillStyle = `rgba(124, 200, 216, ${pulse * 0.8})`;
+        ctx.font = 'bold 9px "IBM Plex Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('[R] 충전', cx, cy - 8);
+      }
+    }
+    return;
+  }
+  const rx = state.robot.x + CFG.ROBOT_W / 2;
+  const ry = state.robot.y + CFG.ROBOT_H / 2 - 4;
+  const cx = c.x + CFG.COP_W / 2;
+  const cy = c.y + CFG.COP_H / 2;
+  const srcPulse = 0.5 + 0.5 * Math.sin(state.time * 0.3);
+  const gSrc = ctx.createRadialGradient(cx, cy, 0, cx, cy, 22);
+  gSrc.addColorStop(0, `rgba(124, 200, 216, ${0.55 * srcPulse})`);
+  gSrc.addColorStop(1, 'rgba(124, 200, 216, 0)');
+  ctx.fillStyle = gSrc;
+  ctx.fillRect(cx - 25, cy - 25, 50, 50);
+  const dstPulse = 0.5 + 0.5 * Math.sin(state.time * 0.3 + Math.PI / 2);
+  const gDst = ctx.createRadialGradient(rx, ry, 0, rx, ry, 22);
+  gDst.addColorStop(0, `rgba(124, 200, 216, ${0.6 * dstPulse})`);
+  gDst.addColorStop(1, 'rgba(124, 200, 216, 0)');
+  ctx.fillStyle = gDst;
+  ctx.fillRect(rx - 25, ry - 25, 50, 50);
+  for (let i = 0; i < 4; i++) {
+    const offset = (i * 0.25);
+    const t = ((state.time * 0.02) + offset) % 1;
+    const mx = (cx + rx) / 2;
+    const my = (cy + ry) / 2 - 15;
+    const px = (1 - t) * (1 - t) * cx + 2 * (1 - t) * t * mx + t * t * rx;
+    const py = (1 - t) * (1 - t) * cy + 2 * (1 - t) * t * my + t * t * ry;
+    const fade = Math.sin(t * Math.PI);
+    ctx.fillStyle = `rgba(124, 200, 216, ${fade * 0.9})`;
+    ctx.beginPath();
+    ctx.arc(px, py, 3.5 + fade * 1.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = `rgba(255, 255, 255, ${fade * 0.9})`;
+    ctx.beginPath();
+    ctx.arc(px, py, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = `rgba(124, 200, 216, ${0.8 + 0.2 * Math.sin(state.time * 0.2)})`;
+  ctx.font = 'bold 9px "IBM Plex Mono", monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('+ CHARGING', rx, state.robot.y - 8);
+}
+
+/* ---------- ROBOT ---------- */
+function drawRobot() {
+  const r = state.robot;
+  const bx = r.x, by = r.y;
+  const bw = CFG.ROBOT_W, bh = CFG.ROBOT_H;
+  if (r.onGround) {
+    ctx.fillStyle = 'rgba(74, 62, 52, 0.4)';
+    ctx.beginPath();
+    ctx.ellipse(bx + bw / 2, r.y + bh, 10, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  if (r.hitTime > 0) { ctx.shadowColor = '#A8302A'; ctx.shadowBlur = 10 * (r.hitTime / 10); }
+  ctx.save();
+  ctx.translate(bx + bw / 2, by + bh);
+  if (r.facing === -1) ctx.scale(-1, 1);
+  ctx.fillStyle = '#1E1E28';
+  ctx.fillRect(-5, -14, 3, 14);
+  ctx.fillRect(2, -14, 3, 14);
+  ctx.fillStyle = '#0A0A12';
+  ctx.fillRect(-5.5, -2, 3.5, 2);
+  ctx.fillRect(2, -2, 3.5, 2);
+  ctx.fillStyle = '#14141C';
+  ctx.fillRect(-5, -7, 3, 1);
+  ctx.fillRect(2, -7, 3, 1);
+  ctx.fillStyle = '#2A2A38';
+  ctx.fillRect(-6, -28, 12, 14);
+  ctx.fillStyle = '#14141C';
+  ctx.fillRect(-7, -27, 1, 4);
+  ctx.fillRect(6, -27, 1, 4);
+  ctx.fillStyle = '#7CC8D8';
+  ctx.fillRect(-1, -23, 2, 2);
+  ctx.fillStyle = '#2A2A38';
+  ctx.fillRect(-4, -36, 8, 8);
+  ctx.fillStyle = '#14141C';
+  ctx.fillRect(-4, -36, 8, 1.5);
+  const eyePulse = 0.75 + 0.25 * Math.sin(state.time * 0.07);
+  ctx.fillStyle = `rgba(124, 200, 216, ${eyePulse})`;
+  ctx.fillRect(-3.5, -33, 7, 1.8);
+  ctx.fillStyle = `rgba(124, 200, 216, ${eyePulse * 0.3})`;
+  ctx.fillRect(-4, -34, 8, 4);
+  ctx.strokeStyle = '#14141C';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(2, -36); ctx.lineTo(2, -41);
+  ctx.stroke();
+  ctx.fillStyle = '#FFCE6E';
+  ctx.beginPath();
+  ctx.arc(2, -41, 1, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  ctx.shadowBlur = 0;
+  const shX = bx + bw / 2, shY = by + bh - 20;
+  ctx.save();
+  ctx.translate(shX, shY);
+  ctx.rotate(r.turretAngle);
+  ctx.fillStyle = '#1E1E28';
+  ctx.fillRect(0, -2, 10, 4);
+  ctx.fillStyle = '#0A0A12';
+  ctx.fillRect(8, -1.5, 6, 3);
+  if (r.muzzleFlash > 0) {
+    const mf = r.muzzleFlash / 5;
+    ctx.fillStyle = `rgba(255, 206, 110, ${mf * 0.85})`;
+    ctx.beginPath();
+    ctx.arc(16, 0, 3 + mf * 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+  if (state.active === 'robot') {
+    const pulse = 0.5 + 0.3 * Math.sin(state.time * 0.12);
+    ctx.strokeStyle = `rgba(124, 200, 216, ${pulse * 0.6})`;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 4]);
+    ctx.lineDashOffset = -state.time * 0.25;
+    ctx.beginPath();
+    ctx.ellipse(bx + bw / 2, r.y + bh, 10, 3, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+}
+
+/* ---------- COP (MAREN, female side-view sprite) ---------- */
+function drawCop() {
+  const c = state.cop;
+  const duckOffset = c.inCover ? 10 : 0;
+  const bx = c.x, by = c.y + duckOffset;
+  const bw = CFG.COP_W, bh = CFG.COP_H - duckOffset;
+  if (c.onGround) {
+    ctx.fillStyle = 'rgba(74, 62, 52, 0.4)';
+    ctx.beginPath();
+    ctx.ellipse(bx + bw / 2, c.y + CFG.COP_H, 10, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  if (c.hitTime > 0) { ctx.shadowColor = '#A8302A'; ctx.shadowBlur = 10 * (c.hitTime / 12); }
+  ctx.save();
+  ctx.translate(bx + bw / 2, by + bh);
+  if (c.facing === -1) ctx.scale(-1, 1);
+  // Legs
+  const legH = c.inCover ? 6 : 14;
+  ctx.fillStyle = '#1A1A24';
+  ctx.fillRect(-5, -legH, 3, legH);
+  ctx.fillRect(2, -legH, 3, legH);
+  ctx.fillStyle = '#0A0A12';
+  ctx.fillRect(-5.5, -2, 3.5, 2);
+  ctx.fillRect(2, -2, 3.5, 2);
+  // Torso
+  const torsoH = 14;
+  const torsoY = -legH - torsoH;
+  ctx.fillStyle = '#2A2A38';
+  ctx.fillRect(-6, torsoY, 12, torsoH);
+  // Subtle feminine waist cinching (slightly narrower mid)
+  ctx.fillStyle = '#1E1E28';
+  ctx.fillRect(-6, torsoY + torsoH - 3, 12, 3);
+  // Badge
+  ctx.fillStyle = '#FFCE6E';
+  ctx.beginPath();
+  ctx.moveTo(3, torsoY + 6);
+  ctx.lineTo(5, torsoY + 8);
+  ctx.lineTo(3, torsoY + 10);
+  ctx.lineTo(1, torsoY + 8);
+  ctx.closePath();
+  ctx.fill();
+  // Head
+  const headY = torsoY - 8;
+  ctx.fillStyle = '#E8B890';  // warmer female skin tone
+  ctx.fillRect(-3, headY + 3, 6, 5);
+  // Hair — long, visible at sides (flowing to shoulder)
+  ctx.fillStyle = '#2A1810';
+  ctx.fillRect(-4, headY + 2, 1, 10);  // left strand
+  ctx.fillRect(3, headY + 2, 1, 10);   // right strand
+  // Cap — slightly softer
+  ctx.fillStyle = '#1A1A24';
+  ctx.fillRect(-4, headY, 8, 4);
+  // Cap bill
+  ctx.fillStyle = '#0A0A12';
+  ctx.fillRect(1, headY + 3, 5, 1.5);
+  // Cap cream band
+  ctx.fillStyle = '#FFCE6E';
+  ctx.fillRect(-4, headY + 3, 8, 0.8);
+  ctx.restore();
+  ctx.shadowBlur = 0;
+  if (state.active === 'cop') {
+    const pulse = 0.5 + 0.3 * Math.sin(state.time * 0.12);
+    ctx.strokeStyle = `rgba(216, 138, 74, ${pulse * 0.7})`;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 4]);
+    ctx.lineDashOffset = -state.time * 0.25;
+    ctx.beginPath();
+    ctx.ellipse(bx + bw / 2, c.y + CFG.COP_H, 10, 3, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  if (c.inCover) {
+    ctx.strokeStyle = 'rgba(124, 200, 216, 0.8)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([2, 3]);
+    ctx.strokeRect(c.inCover.x - 0.5, c.inCover.y - 0.5, c.inCover.w + 1, c.inCover.h + 1);
+    ctx.setLineDash([]);
+  }
+}
+
+function drawEnemy(e) {
+  if (e.type === 'humanoid') drawHumanoid(e, false);
+  else if (e.type === 'drone') drawDrone(e, false);
+}
+function drawAmbush(e) {
+  if (e.type === 'ambush_humanoid') drawHumanoid(e, true);
+  else if (e.type === 'ambush_drone') drawDrone(e, true);
+}
+
+function drawHumanoid(e, isAmbush) {
+  const bx = e.x - 4, by = e.y;
+  const bw = 22, bh = 34;
+  ctx.fillStyle = 'rgba(74, 62, 52, 0.4)';
+  ctx.beginPath();
+  ctx.ellipse(bx + bw / 2, e.y + bh, 10, 3, 0, 0, Math.PI * 2);
+  ctx.fill();
+  if (e.hitTime > 0) { ctx.shadowColor = '#FFCE6E'; ctx.shadowBlur = 10; }
+  if (isAmbush && e.spawnPhase === 1) {
+    const f = 1 - e.spawnFrame / 30;
+    ctx.fillStyle = `rgba(168, 48, 42, ${f * 0.6})`;
+    ctx.fillRect(bx - 8, by - 8, bw + 16, bh + 16);
+  }
+  ctx.save();
+  ctx.translate(bx + bw / 2, by + bh);
+  if (e.facing === -1) ctx.scale(-1, 1);
+  ctx.fillStyle = '#1E1E28';
+  ctx.fillRect(-5, -14, 3, 14);
+  ctx.fillRect(2, -14, 3, 14);
+  ctx.fillStyle = '#0A0A12';
+  ctx.fillRect(-5.5, -2, 3.5, 2);
+  ctx.fillRect(2, -2, 3.5, 2);
+  ctx.fillStyle = isAmbush ? '#3A1418' : '#2A1E24';
+  ctx.fillRect(-7, -28, 14, 14);
+  ctx.fillStyle = isAmbush ? '#C83838' : '#8A2420';
+  ctx.fillRect(-6, -22, 12, 2);
+  ctx.fillStyle = isAmbush ? '#3A1418' : '#2A1E24';
+  ctx.fillRect(-4, -36, 8, 8);
+  ctx.fillStyle = '#14141C';
+  ctx.fillRect(-4, -36, 8, 1.5);
+  const pulse = e.alertLevel > 1 || isAmbush ? 0.5 + 0.5 * Math.sin(state.time * 0.3) : 0.6;
+  ctx.fillStyle = `rgba(220, 80, 80, ${pulse})`;
+  ctx.fillRect(-3.5, -33, 7, 1.8);
+  ctx.restore();
+  ctx.shadowBlur = 0;
+  if (e.alertLevel > 0.5 || isAmbush) {
+    const shX = bx + bw / 2, shY = by + bh - 20;
+    ctx.save();
+    ctx.translate(shX, shY);
+    ctx.rotate(e.aimAngle);
+    ctx.fillStyle = '#1E1E28';
+    ctx.fillRect(0, -2, 10, 4);
+    ctx.fillStyle = '#0A0A12';
+    ctx.fillRect(8, -1.5, 6, 3);
+    ctx.restore();
+  }
+  if (e.hp < (isAmbush ? CFG.AMBUSH_HP : CFG.HUMANOID_HP)) {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+    ctx.fillRect(bx, e.y - 6, bw, 2);
+    ctx.fillStyle = '#C84848';
+    ctx.fillRect(bx, e.y - 6, bw * (e.hp / (isAmbush ? CFG.AMBUSH_HP : CFG.HUMANOID_HP)), 2);
+  }
+  if ((e.alertLevel > 1.5 || isAmbush) && state.time % 20 < 10) {
+    ctx.fillStyle = '#A8302A';
+    ctx.font = 'bold 12px "IBM Plex Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(isAmbush ? '!!' : '!', bx + bw / 2, e.y - 10);
+  }
+}
+
+function drawDrone(e, isAmbush) {
+  const bx = e.x, by = e.y;
+  ctx.fillStyle = 'rgba(74, 62, 52, 0.25)';
+  ctx.beginPath();
+  ctx.ellipse(bx + 8, by + 40, 12, 3, 0, 0, Math.PI * 2);
+  ctx.fill();
+  if (e.hitTime > 0) { ctx.shadowColor = '#FFCE6E'; ctx.shadowBlur = 10; }
+  if (isAmbush && e.spawnPhase === 1) {
+    const f = 1 - e.spawnFrame / 30;
+    ctx.fillStyle = `rgba(168, 48, 42, ${f * 0.6})`;
+    ctx.beginPath();
+    ctx.arc(bx + 8, by + 10, 14, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.save();
+  ctx.translate(bx + 8, by + 10);
+  ctx.fillStyle = isAmbush ? '#3A1418' : '#1E1E28';
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = Math.PI / 3 * i - Math.PI / 6;
+    const x = Math.cos(a) * 11, y = Math.sin(a) * 7;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#14141C';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(-9, 0); ctx.lineTo(9, 0);
+  ctx.stroke();
+  const pulse = 0.5 + 0.5 * Math.sin(state.time * 0.3);
+  ctx.fillStyle = `rgba(220, 80, 80, ${pulse})`;
+  ctx.fillRect(-2, -1, 4, 2);
+  ctx.fillStyle = 'rgba(58, 46, 40, 0.3)';
+  ctx.fillRect(-14, -1, 5, 2);
+  ctx.fillRect(9, -1, 5, 2);
+  ctx.restore();
+  ctx.shadowBlur = 0;
+  const maxHP = isAmbush ? CFG.AMBUSH_HP : CFG.DRONE_HP;
+  if (e.hp < maxHP) {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+    ctx.fillRect(bx, by - 4, 16, 2);
+    ctx.fillStyle = '#C84848';
+    ctx.fillRect(bx, by - 4, 16 * (e.hp / maxHP), 2);
+  }
+}
+
+function drawEnemyAimTelegraphs() {
+  const all = [...state.enemies, ...state.ambushes];
+  for (const e of all) {
+    if (!e.alive || e.aimTimer <= 0) continue;
+    const sx = e.x + 7, sy = e.y + 14;
+    const aimTime = e.type === 'drone' || e.type === 'ambush_drone' ? CFG.DRONE_AIM_TIME : CFG.HUMANOID_AIM_TIME;
+    const prog = Math.min(1, e.aimTimer / aimTime);
+    const len = 200 * prog;
+    const tx = sx + Math.cos(e.aimAngle) * len;
+    const ty = sy + Math.sin(e.aimAngle) * len;
+    ctx.strokeStyle = `rgba(200, 72, 72, ${0.25 + prog * 0.45})`;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 4]);
+    ctx.beginPath();
+    ctx.moveTo(sx + Math.cos(e.aimAngle) * 12, sy + Math.sin(e.aimAngle) * 12);
+    ctx.lineTo(tx, ty);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+}
+
+function drawAimLine() {
+  const r = state.robot;
+  if (r.autoTarget && r.battery > 0) {
+    const e = r.autoTarget;
+    if (e.alive) {
+      const ex = e.x + 7, ey = e.y + 16;
+      const pulse = 0.7 + 0.3 * Math.sin(state.time * 0.3);
+      const active = state.active === 'robot';
+      ctx.strokeStyle = `rgba(124, 200, 216, ${pulse * (active ? 1 : 0.6)})`;
+      ctx.lineWidth = active ? 1.2 : 1;
+      ctx.beginPath();
+      ctx.arc(ex, ey, 14, 0, Math.PI * 2);
+      ctx.stroke();
+      for (let a = 0; a < 4; a++) {
+        const ang = (a * Math.PI / 2) + Math.PI / 4;
+        ctx.beginPath();
+        ctx.moveTo(ex + Math.cos(ang) * 12, ey + Math.sin(ang) * 12);
+        ctx.lineTo(ex + Math.cos(ang) * 18, ey + Math.sin(ang) * 18);
+        ctx.stroke();
+      }
+    }
+  }
+  if (state.active !== 'robot' || r.battery <= 0) return;
+  const sx = r.x + CFG.ROBOT_W / 2, sy = r.y + 10;
+  const aimDist = 300;
+  const tx = sx + Math.cos(r.turretAngle) * aimDist;
+  const ty = sy + Math.sin(r.turretAngle) * aimDist;
+  const locked = !!r.autoTarget;
+  ctx.strokeStyle = locked ? 'rgba(124, 200, 216, 0.55)' : 'rgba(124, 200, 216, 0.3)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 6]);
+  ctx.beginPath();
+  ctx.moveTo(sx, sy);
+  ctx.lineTo(tx, ty);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function drawBullets() {
+  for (const b of state.bullets) {
+    const isP = b.owner === 'robot';
+    const col = isP ? '255, 206, 110' : '200, 72, 72';
+    for (let i = 0; i < b.trail.length; i++) {
+      const t = b.trail[i];
+      if (i > 0) {
+        const prev = b.trail[i - 1];
+        const alpha = (i / b.trail.length) * 0.55;
+        ctx.strokeStyle = `rgba(${col}, ${alpha})`;
+        ctx.lineWidth = 1.8 * (i / b.trail.length);
+        ctx.beginPath();
+        ctx.moveTo(prev.x, prev.y);
+        ctx.lineTo(t.x, t.y);
+        ctx.stroke();
+      }
+    }
+    ctx.fillStyle = `rgba(${col}, 0.4)`;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = isP ? '#FFE8B8' : '#EAB0B0';
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawParticles() {
+  for (const p of state.particles) {
+    const alpha = p.life / p.maxLife;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawDust() {
+  for (const d of state.dust) {
+    ctx.fillStyle = `rgba(255, 230, 170, ${d.alpha})`;
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawHUDOverlay() {
+  const mmX = CFG.VIEW_W - 210, mmY = 12, mmW = 200, mmH = 60;
+  ctx.fillStyle = 'rgba(58, 46, 40, 0.85)';
+  ctx.fillRect(mmX, mmY, mmW, mmH);
+  ctx.strokeStyle = 'rgba(216, 138, 74, 0.5)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(mmX + 0.5, mmY + 0.5, mmW - 1, mmH - 1);
+  const sx = mmW / CFG.WORLD_W, sy = mmH / CFG.WORLD_H;
+  for (const r of ROOMS) {
+    if (r.hidden && !state.door.open) continue;
+    ctx.fillStyle = 'rgba(216, 197, 168, 0.5)';
+    ctx.fillRect(mmX + r.x * sx, mmY + r.y * sy, r.w * sx, r.h * sy);
+  }
+  for (const c of state.covers) {
+    if (c.destroyed) continue;
+    ctx.fillStyle = 'rgba(106, 72, 50, 0.8)';
+    ctx.fillRect(mmX + c.x * sx, mmY + c.y * sy, Math.max(2, c.w * sx), Math.max(2, c.h * sy));
+  }
+  for (const e of state.enemies) {
+    if (!e.alive) continue;
+    ctx.fillStyle = '#C84848';
+    ctx.fillRect(mmX + e.x * sx - 2, mmY + e.y * sy - 2, 4, 4);
+  }
+  for (const e of state.ambushes) {
+    if (!e.alive) continue;
+    ctx.fillStyle = '#FF4040';
+    ctx.fillRect(mmX + e.x * sx - 3, mmY + e.y * sy - 3, 6, 6);
+  }
+  ctx.fillStyle = '#D88A4A';
+  ctx.fillRect(mmX + state.cop.x * sx - 2, mmY + state.cop.y * sy - 2, 4, 4);
+  ctx.fillStyle = '#7CC8D8';
+  ctx.fillRect(mmX + state.robot.x * sx - 2, mmY + state.robot.y * sy - 2, 4, 4);
+  ctx.strokeStyle = 'rgba(255, 206, 110, 0.7)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(mmX + state.camera.x * sx, mmY + state.camera.y * sy, CFG.VIEW_W * sx, CFG.VIEW_H * sy);
+  ctx.fillStyle = 'rgba(245, 238, 224, 0.8)';
+  ctx.font = '8px "IBM Plex Mono", monospace';
+  ctx.fillText('MAP', mmX + 4, mmY + 10);
+  ctx.fillText(`${state.active === 'cop' ? 'MAREN' : 'M-07'} ACTIVE`, mmX + 4, mmY + mmH - 4);
+}
+
+function drawDistanceVignettes() {
+  if (state.warningVignette > 0) {
+    const g = ctx.createRadialGradient(
+      CFG.VIEW_W / 2, CFG.VIEW_H / 2, CFG.VIEW_W * 0.25,
+      CFG.VIEW_W / 2, CFG.VIEW_H / 2, CFG.VIEW_W * 0.55
+    );
+    g.addColorStop(0, 'rgba(216, 138, 74, 0)');
+    g.addColorStop(1, `rgba(216, 138, 74, ${state.warningVignette * 0.4})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, CFG.VIEW_W, CFG.VIEW_H);
+  }
+  if (state.dangerVignette > 0) {
+    const pulse = 0.7 + 0.3 * Math.sin(state.time * 0.3);
+    const g = ctx.createRadialGradient(
+      CFG.VIEW_W / 2, CFG.VIEW_H / 2, CFG.VIEW_W * 0.2,
+      CFG.VIEW_W / 2, CFG.VIEW_H / 2, CFG.VIEW_W * 0.5
+    );
+    g.addColorStop(0, 'rgba(168, 48, 42, 0)');
+    g.addColorStop(1, `rgba(168, 48, 42, ${state.dangerVignette * 0.55 * pulse})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, CFG.VIEW_W, CFG.VIEW_H);
+    ctx.fillStyle = `rgba(168, 48, 42, ${pulse})`;
+    ctx.font = 'bold 14px "IBM Plex Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('DANGER · 로봇에게 복귀', CFG.VIEW_W / 2, 30);
+  }
+}
+
+function drawVignette() {
+  const g = ctx.createRadialGradient(
+    CFG.VIEW_W / 2, CFG.VIEW_H / 2, CFG.VIEW_W * 0.4,
+    CFG.VIEW_W / 2, CFG.VIEW_H / 2, CFG.VIEW_W * 0.8
+  );
+  g.addColorStop(0, 'rgba(74, 62, 52, 0)');
+  g.addColorStop(1, 'rgba(74, 62, 52, 0.25)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, CFG.VIEW_W, CFG.VIEW_H);
+}
+
+function loop() { update(); render(); requestAnimationFrame(loop); }
+
+// Transition from exterior
+let fromExterior = null;
+try {
+  const raw = sessionStorage.getItem('lastpatrol_from_exterior');
+  if (raw) fromExterior = JSON.parse(raw);
+} catch (e) {}
+if (fromExterior) {
+  DIALOGUE.intro = {
+    speaker: 'MAREN',
+    text: `${fromExterior.address}. 도착했다.\nM-07, 너 먼저 들어가라.`,
+    color: 'amber'
+  };
+  const tb = document.querySelector('#title-bar .title');
+  if (tb) tb.textContent = `INTERIOR · ${fromExterior.address} · ${fromExterior.case}`;
+}
+
+showDialogue('intro');
+setTimeout(() => showDialogue('robot_scan'), 4000);
+loop();
+</script>
+</body>
+</html>

@@ -1,0 +1,2334 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Last Patrol · 도시 순찰 목업 v0.4 (대화 + 진입)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Serif:wght@400&display=swap" rel="stylesheet">
+<style>
+  /* ========================================================
+   * LAST PATROL — city patrol v0.2 (winter morning)
+   * Tone pivot: bright snowy town · quarter-view · diegetic
+   * crime marker. Peaceful exterior, so the case contrasts.
+   * ======================================================== */
+  :root {
+    --sky-top:    #DEE3E8;
+    --sky-bottom: #F0E4D8;
+    --snow-light: #FFFAF0;
+    --snow-mid:   #E8DFCC;
+    --snow-shade: #C8D0D8;
+    --wall-shade: #A8A0A0;
+    --wall-sun:   #CBBDAA;
+    --window:     #3A4550;
+    --roof:       #5A4A40;
+    --roof-dark:  #3E342E;
+    --road:       #9B9A96;
+    --sidewalk:   #BCB5A8;
+    --tree:       #4A3E34;
+    --blood:      #A8302A;
+    --cream:      #FFCE6E;
+    --paper:      #F5EEE0;
+    --paper-warm: #E8DFCC;
+    --ink:        #3A2E28;
+    --subtle:     #8A7F75;
+    --accent:     #6A4832;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'IBM Plex Serif', 'KoPub Batang', serif;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+  body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    background:
+      radial-gradient(ellipse at 50% 30%, #F8F2E6 0%, var(--paper) 60%, #DDD4C2 100%);
+  }
+  #stage {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    max-width: 680px;
+  }
+
+  #title-bar {
+    padding: 4px 2px 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--subtle);
+    border-bottom: 1px solid rgba(138, 127, 117, 0.3);
+  }
+  #title-bar .title {
+    font-family: 'Cormorant Garamond', 'KoPub Batang', serif;
+    font-weight: 600;
+    font-size: 18px;
+    color: var(--ink);
+    letter-spacing: 0.03em;
+    text-transform: none;
+  }
+  #title-bar .badge {
+    color: var(--accent);
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  #title-bar .badge::before {
+    content: '';
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 3s infinite;
+  }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  #hud {
+    padding: 10px 4px;
+    display: flex;
+    gap: 30px;
+    align-items: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+  }
+  .hud-item { display: flex; align-items: center; gap: 8px; }
+  .hud-label {
+    color: var(--subtle);
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .hud-value {
+    color: var(--ink);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.04em;
+  }
+  .hud-value.accent { color: var(--accent); }
+  .hud-value.blood { color: var(--blood); }
+
+  #canvas-wrap {
+    position: relative;
+    box-shadow:
+      0 0 0 1px rgba(138, 127, 117, 0.25),
+      0 14px 40px rgba(90, 74, 64, 0.25);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  canvas {
+    display: block;
+    background: var(--sky-top);
+    cursor: crosshair;
+  }
+  #paper-grain {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      repeating-linear-gradient(0deg, transparent 0 3px, rgba(90, 74, 64, 0.008) 3px 4px),
+      repeating-linear-gradient(90deg, transparent 0 3px, rgba(255, 250, 240, 0.01) 3px 4px);
+    mix-blend-mode: multiply;
+  }
+
+  #log {
+    padding: 10px 4px;
+    height: 72px;
+    overflow-y: auto;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    line-height: 1.8;
+    scrollbar-width: thin;
+    scrollbar-color: var(--subtle) transparent;
+  }
+  #log::-webkit-scrollbar { width: 4px; }
+  #log::-webkit-scrollbar-thumb { background: var(--subtle); }
+  #log .entry { color: var(--subtle); display: flex; gap: 10px; }
+  #log .entry .timestamp { color: rgba(138, 127, 117, 0.55); font-size: 9px; padding-top: 2px; }
+  #log .entry.accent { color: var(--accent); }
+  #log .entry.blood { color: var(--blood); }
+  #log .entry.peace { color: var(--ink); }
+
+  #controls {
+    padding: 10px 4px 4px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9.5px;
+    color: var(--subtle);
+    letter-spacing: 0.12em;
+    text-align: center;
+    text-transform: uppercase;
+  }
+  kbd {
+    background: rgba(138, 127, 117, 0.15);
+    border: 1px solid rgba(138, 127, 117, 0.3);
+    padding: 2px 7px;
+    color: var(--ink);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9.5px;
+  }
+
+  /* ---------- Dialogue panel (shared style with interior v10) ---------- */
+  #dialogue-panel {
+    padding: 12px 14px;
+    background: var(--paper);
+    border-left: 2px solid var(--accent-warm);
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    min-height: 82px;
+    transition: border-left-color 0.4s;
+    margin-top: 10px;
+  }
+  #dialogue-panel.cyan  { border-left-color: #7CC8D8; }
+  #dialogue-panel.amber { border-left-color: var(--accent-warm); }
+  #dialogue-panel.blood { border-left-color: var(--blood); }
+  #dialogue-panel.subtle{ border-left-color: var(--subtle); }
+  #dialogue-profile {
+    flex-shrink: 0;
+    width: 64px;
+    height: 64px;
+    background: #2A2A38;
+    border: 1px solid var(--subtle);
+    position: relative;
+    overflow: hidden;
+    image-rendering: pixelated;
+  }
+  #dialogue-content { flex: 1; min-width: 0; padding-top: 2px; }
+  #dialogue-speaker {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    color: var(--subtle);
+    text-transform: uppercase;
+    margin-bottom: 5px;
+  }
+  #dialogue-text {
+    font-family: 'IBM Plex Serif', 'KoPub Batang', serif;
+    font-size: 13px;
+    line-height: 1.65;
+    color: var(--ink);
+    white-space: pre-line;
+    min-height: 40px;
+  }
+  #dialogue-text::after {
+    content: '▊';
+    color: var(--accent-warm);
+    margin-left: 2px;
+    animation: caret 0.85s infinite;
+    opacity: 0;
+  }
+  #dialogue-text.typing::after { opacity: 1; }
+  @keyframes caret { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
+
+  #dispatch-toast {
+    position: absolute;
+    top: 20px; left: 50%;
+    transform: translateX(-50%) translateY(-100px);
+    background: var(--paper);
+    border-left: 3px solid var(--blood);
+    padding: 11px 18px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    color: var(--ink);
+    letter-spacing: 0.08em;
+    transition: transform 0.7s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.7s;
+    opacity: 0;
+    pointer-events: none;
+    max-width: 90%;
+    box-shadow: 0 10px 30px rgba(58, 46, 40, 0.2);
+  }
+  #dispatch-toast.show {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+  }
+  #dispatch-toast .tag {
+    color: var(--blood);
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    display: block;
+    font-size: 9px;
+    margin-bottom: 4px;
+  }
+  #dispatch-toast .body {
+    font-family: 'IBM Plex Serif', serif;
+    font-size: 12.5px;
+    letter-spacing: normal;
+    color: var(--ink);
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="title-bar">
+    <span class="title">CITY PATROL · 겨울 아침 (v0.4)</span>
+    <span class="badge">DAY 12 · 07:14</span>
+  </div>
+
+  <div id="hud">
+    <div class="hud-item">
+      <span class="hud-label">TIME</span>
+      <span class="hud-value" id="clock">07:14</span>
+    </div>
+    <div class="hud-item">
+      <span class="hud-label">DISTRICT</span>
+      <span class="hud-value">WESTSIDE</span>
+    </div>
+    <div class="hud-item">
+      <span class="hud-label">TEMP</span>
+      <span class="hud-value">-7°C</span>
+    </div>
+    <div class="hud-item">
+      <span class="hud-label">SPEED</span>
+      <span class="hud-value" id="speedo">0</span>
+    </div>
+    <div class="hud-item">
+      <span class="hud-label">DISPATCH</span>
+      <span class="hud-value accent" id="dispatch-status">QUIET</span>
+    </div>
+  </div>
+
+  <div id="canvas-wrap">
+    <canvas id="world" width="640" height="400"></canvas>
+    <div id="paper-grain"></div>
+    <div id="dispatch-toast">
+      <span class="tag" id="toast-tag">DISPATCH · CASE-0417</span>
+      <span class="body" id="toast-body">웨스트사이드 132번지 · 주거지 · 가족 연락 두절</span>
+    </div>
+  </div>
+
+  <div id="log"></div>
+
+  <div id="dialogue-panel" class="amber">
+    <canvas id="dialogue-profile" width="64" height="64"></canvas>
+    <div id="dialogue-content">
+      <div id="dialogue-speaker">MAREN · 경찰</div>
+      <div id="dialogue-text">조용한 아침이군. 커피 한 잔 더 하고 싶다.</div>
+    </div>
+  </div>
+
+  <div id="controls">
+    <kbd>L-CLICK</kbd> 운전 목적지 &nbsp;·&nbsp;
+    <kbd>SHIFT</kbd> 가속 &nbsp;·&nbsp;
+    <kbd>H</kbd> 경광등 &nbsp;·&nbsp;
+    <kbd>E</kbd> 하차 (현장 도착 시) &nbsp;·&nbsp;
+    <kbd>WASD</kbd> 수동 폴백
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+ * Last Patrol · 도시 순찰 목업 v0.4
+ * ---------------------------------------------------------------------
+ * v0.3 → v0.4 변경:
+ *   · 배치 룰 확립 — 도로 영역 (sidewalk 포함) 내에 건물/나무/눈더미
+ *     배치 금지. 초기화 시 validateRoadClear() 자동 실행
+ *   · 건물 재배치 — 모텔/교회/좌측건물 등 도로 침범 수정
+ *   · 나무/눈더미 재배치 — 세로 도로 근처 침범 방지
+ *   · 주행 중 대화 UI — 하단 오버레이, 좌측 프로필 + 우측 대사
+ *     타이프라이터 효과, 3단계 페이즈 (아침 → 사건 → 도착)
+ *   · 실내 진입 연결 — 사건 현장 도착 후 E 키로 페이드 아웃 →
+ *     cop_robot_coop_prototype_v05.html 로 이동
+ *
+ * 배치 룰 (도로 영역 안에 배치 금지):
+ *   ROAD_H_N: y 196~274 (sidewalk 포함)
+ *   ROAD_H_S: y 556~634
+ *   ROAD_V_W: x 386~454
+ *   ROAD_V_E: x 866~934
+ * ===================================================================== */
+
+const CFG = {
+  MAP_W: 1280, MAP_H: 800,
+  VIEW_W: 640, VIEW_H: 400,
+
+  CAR_MAX_SPEED: 2.4,
+  CAR_BOOST_MULT: 1.65,
+  CAR_ACCEL: 0.08,
+  CAR_FRICTION: 0.035,
+  CAR_TURN: 0.048,
+  CAR_REVERSE_MULT: 0.5,
+
+  CAM_LERP: 0.08,
+  CAM_LOOKAHEAD: 50,
+
+  HEADLIGHT_RANGE: 110,
+  HEADLIGHT_ANGLE: 0.55,
+};
+
+/* ===================== BUILDINGS =====================
+ * ROAD CLEARANCE RULE (v0.4):
+ *   모든 건물 footprint는 다음 도로 영역과 겹쳐서는 안 된다.
+ *     H_N: y [196, 274]   H_S: y [556, 634]
+ *     V_W: x [386, 454]   V_E: x [866, 934]
+ *   Blocks (x-ranges):  A [0..386]  B [454..866]  C [934..1280]
+ *   Rows  (y-ranges):   N [0..196]  M [274..556]  S [634..800]
+ */
+const BUILDINGS = [
+  // === 북쪽 행 (bottom y+h ≤ 196) ===
+  // Block A
+  { x:  70, y:  80, w: 115, h: 75, type: 'residence',   windows: '1..0.0..0', chimney: true, smoke: true },
+  { x: 225, y:  90, w: 115, h: 65, type: 'residence',   windows: '..1..0.0.', chimney: true, smoke: false },
+  // Block B
+  { x: 480, y:  60, w: 150, h: 95, type: 'church',      windows: '.1.' },
+  { x: 680, y:  85, w: 130, h: 70, type: 'residence',   windows: '0...1...0', chimney: true, smoke: true },
+  // Block C
+  { x: 960, y:  80, w: 130, h: 75, type: 'motel',       windows: '0.0.0.0.' },
+  { x: 1110, y: 90, w: 125, h: 65, type: 'residence',   windows: '..0.0..1.', chimney: true, smoke: false },
+
+  // === 중간 행 (y ∈ [274..556]) ===
+  // Block A
+  { x: 100, y: 450, w: 125, h: 80, type: 'residence_case', windows: 'X..0..XX.', chimney: true, smoke: false },  // CASE SITE
+  { x: 250, y: 450, w: 120, h: 80, type: 'warehouse',   windows: '0.0.0.0' },
+  // Block B
+  { x: 470, y: 460, w: 130, h: 75, type: 'residence',   windows: '.0..1..0.', chimney: true, smoke: true },
+  { x: 640, y: 430, w: 170, h: 105, type: 'gasstation' },
+  // Block C
+  { x: 960, y: 450, w: 130, h: 80, type: 'residence',   windows: '0..0.0..0', chimney: true, smoke: false },
+  { x: 1120, y: 450, w: 120, h: 80, type: 'residence',  windows: '.0.0..0.0', chimney: true, smoke: true },
+
+  // === 남쪽 행 (y+h ≤ 800, y ≥ 634) ===
+  // Block A
+  { x:  70, y: 680, w: 135, h: 75, type: 'residence',   windows: '0..0..0.0', chimney: true, smoke: false },
+  { x: 240, y: 685, w: 125, h: 70, type: 'vacant' },
+  // Block B
+  { x: 470, y: 665, w: 175, h: 90, type: 'apartment',   windows: '0100010100' },
+  { x: 680, y: 680, w: 130, h: 75, type: 'residence',   windows: '..0.0..0.', chimney: true, smoke: true },
+  // Block C
+  { x: 960, y: 665, w: 155, h: 90, type: 'warehouse',   windows: '0.0.0.0' },
+  { x: 1150, y: 685, w: 115, h: 70, type: 'residence',  windows: '0...0.0..', chimney: true, smoke: false },
+];
+
+const ROADS = [
+  { x: 0, y: 200, w: 1280, h: 70, dir: 'h' },
+  { x: 0, y: 560, w: 1280, h: 70, dir: 'h' },
+  { x: 390, y: 0, w: 60, h: 800, dir: 'v' },
+  { x: 870, y: 0, w: 60, h: 800, dir: 'v' },
+];
+
+/* Bare trees (winter) — placed in gaps between buildings, clear of roads */
+const TREES = [
+  // 북쪽 잔디 (y ≤ 180, buildings occupy ~80-155)
+  { x: 30, y: 175 },              // Block A left edge
+  { x: 360, y: 175 },             // Block A right edge (x 350~370, road starts 386)
+  { x: 470, y: 180 },              // Block B left edge (road ends 454, tree at 460-480)
+  { x: 655, y: 175 },             // Between church and residence (B mid)
+  { x: 945, y: 180 },             // Block C left edge (road ends 934, tree at 935-955)
+  { x: 1100, y: 175 },            // Between motel and residence (C mid)
+  { x: 1260, y: 175 },            // Block C right edge
+  // 중간 잔디 (y 300~410, 건물 아래쪽은 y 430~535)
+  { x: 30, y: 370 },              // Block A far left
+  { x: 620, y: 370 },             // Block B gap between residence and gasstation
+  { x: 840, y: 370 },             // Block B right edge
+  { x: 1100, y: 370 },            // Block C gap between buildings
+  { x: 1260, y: 370 },            // Block C right edge
+  // 남쪽 잔디 (y ≥ 770, 건물 y 665-755)
+  { x: 40, y: 780 },              // Block A left
+  { x: 370, y: 780 },              // Block A right (x 360~380, road 386 — safe)
+  { x: 465, y: 780 },              // Block B left
+  { x: 660, y: 780 },             // Block B gap
+  { x: 1130, y: 780 },            // Block C gap
+  { x: 1265, y: 780 },            // Block C right
+];
+
+/* Static snowdrifts — piles along fences, corners (road-clear) */
+const SNOWDRIFTS = [
+  // 북쪽 잔디
+  { x: 50, y: 175, r: 14 },
+  { x: 1265, y: 175, r: 16 },
+  // 중간 잔디 (y 300~410, away from roads)
+  { x: 30, y: 330, r: 12 },
+  { x: 620, y: 345, r: 14 },      // Block B mid gap
+  { x: 1260, y: 340, r: 18 },
+  // 남쪽 잔디
+  { x: 45, y: 775, r: 14 },
+  { x: 1265, y: 775, r: 14 },
+];
+
+/* ===================== STATE ===================== */
+const state = {
+  car: {
+    x: CFG.MAP_W / 2, y: 350,
+    angle: -Math.PI / 2,
+    speed: 0,
+    beacon: false,
+    beaconT: 0,
+  },
+  cam: { x: 0, y: 0 },
+  keys: {},
+  mouse: { x: 0, y: 0 },
+  moveTarget: null,
+  stuckFrames: 0,
+  time: 0,
+  clock: { h: 7, m: 14, s: 0 },
+  snowflakes: [],
+  smokeTime: 0,
+  dispatched: false,
+  caseMarker: null,
+  dispatchTime: 35 * 60,
+  // v0.4: dialogue system
+  dialogue: {
+    phase: 'calm',         // 'calm' | 'case' | 'arrived' | 'done'
+    index: 0,
+    charIndex: 0,
+    pauseTime: 0,
+    state: 'typing',       // 'typing' | 'pausing' | 'done'
+    history: [],           // last 2 completed lines
+    startDelay: 60,        // wait before first line
+  },
+  // v0.4: interior entry transition
+  entering: false,
+  enterFade: 0,
+};
+
+/* Falling snow particles (screen space) */
+for (let i = 0; i < 55; i++) {
+  state.snowflakes.push({
+    x: Math.random() * CFG.VIEW_W,
+    y: Math.random() * CFG.VIEW_H,
+    vy: 0.3 + Math.random() * 0.5,
+    vx: -0.3 + Math.random() * 0.2,
+    size: 0.6 + Math.random() * 1.4,
+    alpha: 0.4 + Math.random() * 0.5,
+    sway: Math.random() * Math.PI * 2,
+  });
+}
+
+/* Smoke puffs (per building with smoke=true) - world space */
+const SMOKES = [];
+for (const b of BUILDINGS) {
+  if (b.smoke && b.chimney) {
+    SMOKES.push({ b, puffs: [] });
+  }
+}
+
+/* ===================== DIALOGUE SCRIPT =====================
+ * Three phases, driven by game events:
+ *   - calm:    morning patrol, banter before dispatch
+ *   - case:    after dispatch, en route to scene
+ *   - arrived: at the case site, before entering
+ */
+const DIALOGUE_PHASES = {
+  calm: [
+    { who: 'cop',   text: '눈이 많이 왔네.' },
+    { who: 'robot', text: '강설량 22cm. 지난 24시간 평균 기온 영하 6도.' },
+    { who: 'cop',   text: '...그냥 많이 왔다고 말한 거야.' },
+    { who: 'robot', text: '긍정 확인. 강설량이 많습니다.' },
+    { who: 'cop',   text: '너는 추위를 느껴?' },
+    { who: 'robot', text: '열 센서는 영하 40도까지 정상 작동합니다.' },
+    { who: 'cop',   text: '그건 느낀다는 거랑 달라.' },
+    { who: 'robot', text: '...무슨 말씀이신지요.' },
+    { who: 'cop',   text: '됐다. 오늘은 조용하길 바라자.' },
+  ],
+  case: [
+    { who: 'robot', text: '무전 수신. 웨스트사이드 132번지. 가족 연락 두절.' },
+    { who: 'cop',   text: '어제 저녁부터였지?' },
+    { who: 'robot', text: '긍정. 마지막 통신 19시 42분.' },
+    { who: 'cop',   text: '눈은 그 전부터 내렸고.' },
+    { who: 'robot', text: '발자국이 남았을 가능성 83%.' },
+    { who: 'cop',   text: '빨리 가자.' },
+  ],
+  arrived: [
+    { who: 'cop',   text: '...여기다.' },
+    { who: 'robot', text: '발자국 확인. 편방향.' },
+    { who: 'cop',   text: '들어간 발자국은 있는데,' },
+    { who: 'cop',   text: '나온 발자국은 없어.' },
+    { who: 'robot', text: '긍정 확인.' },
+    { who: 'cop',   text: '내리자. 문을 확인해야 해.' },
+  ],
+};
+
+/* ===================== ROAD CLEARANCE VALIDATION =====================
+ * Runs once at init. Logs any building/tree/snowdrift that overlaps
+ * a road area. Add the buffer here to give visual breathing room too.
+ */
+function validateRoadClear() {
+  const roadBuffer = 2;   // sidewalk is already 4px wide; this is extra safety
+  const issues = [];
+
+  function overlapsRoad(bx, by, bw, bh) {
+    for (const r of ROADS) {
+      const rx = r.x - roadBuffer;
+      const ry = r.y - roadBuffer;
+      const rw = r.w + roadBuffer * 2;
+      const rh = r.h + roadBuffer * 2;
+      if (bx < rx + rw && bx + bw > rx && by < ry + rh && by + bh > ry) return true;
+    }
+    return false;
+  }
+
+  for (const b of BUILDINGS) {
+    if (overlapsRoad(b.x, b.y, b.w, b.h))
+      issues.push(`Building [${b.type}] at (${b.x},${b.y},${b.w}x${b.h}) overlaps road`);
+  }
+  for (const t of TREES) {
+    // Tree footprint: ~20w x 40h, bottom at t.y
+    if (overlapsRoad(t.x - 10, t.y - 36, 20, 40))
+      issues.push(`Tree at (${t.x},${t.y}) overlaps road`);
+  }
+  for (const s of SNOWDRIFTS) {
+    if (overlapsRoad(s.x - s.r, s.y - s.r * 0.5, s.r * 2, s.r))
+      issues.push(`Snowdrift at (${s.x},${s.y}) overlaps road`);
+  }
+
+  if (issues.length) {
+    console.warn('[ROAD VALIDATION] ' + issues.length + ' issue(s):\n  ' + issues.join('\n  '));
+  } else {
+    console.log('[ROAD VALIDATION] ✓ All elements clear of road areas.');
+  }
+}
+validateRoadClear();
+const KEY_MAP = {
+  'w': 'up', 'arrowup': 'up',
+  's': 'down', 'arrowdown': 'down',
+  'a': 'left', 'arrowleft': 'left',
+  'd': 'right', 'arrowright': 'right',
+  'shift': 'boost',
+  'h': 'beacon',
+  'e': 'interact',
+};
+const justPressed = {};
+document.addEventListener('keydown', e => {
+  const k = KEY_MAP[e.key.toLowerCase()];
+  if (!k) return;
+  e.preventDefault();
+  if (!state.keys[k]) justPressed[k] = true;
+  state.keys[k] = true;
+});
+document.addEventListener('keyup', e => {
+  const k = KEY_MAP[e.key.toLowerCase()];
+  if (!k) return;
+  state.keys[k] = false;
+});
+window.addEventListener('blur', () => {
+  state.keys = {};
+  state.moveTarget = null;
+  state.stuckFrames = 0;
+});
+
+// Canvas mouse events — left click sets drive target, track cursor for crosshair
+const canvasEl = document.getElementById('world');
+canvasEl.addEventListener('mousemove', e => {
+  const rect = canvasEl.getBoundingClientRect();
+  const scaleX = canvasEl.width / rect.width;
+  const scaleY = canvasEl.height / rect.height;
+  state.mouse.x = (e.clientX - rect.left) * scaleX;
+  state.mouse.y = (e.clientY - rect.top) * scaleY;
+});
+canvasEl.addEventListener('mousedown', e => {
+  if (e.button !== 0) return;
+  const rect = canvasEl.getBoundingClientRect();
+  const scaleX = canvasEl.width / rect.width;
+  const scaleY = canvasEl.height / rect.height;
+  const screenX = (e.clientX - rect.left) * scaleX;
+  const screenY = (e.clientY - rect.top) * scaleY;
+  state.moveTarget = {
+    x: screenX + state.cam.x,
+    y: screenY + state.cam.y,
+  };
+  state.stuckFrames = 0;
+  e.preventDefault();
+});
+canvasEl.addEventListener('contextmenu', e => e.preventDefault());
+
+/* ===================== UPDATE ===================== */
+function update() {
+  state.time++;
+
+  if (state.time % 6 === 0) {
+    state.clock.s += 1;
+    if (state.clock.s >= 60) { state.clock.s = 0; state.clock.m += 1; }
+    if (state.clock.m >= 60) { state.clock.m = 0; state.clock.h = (state.clock.h + 1) % 24; }
+  }
+
+  // Car physics — auto-drive (mouse target) + WASD fallback
+  const c = state.car;
+
+  // Check manual input — cancels auto-drive
+  const manualInput = state.keys.up || state.keys.down || state.keys.left || state.keys.right;
+  if (manualInput && state.moveTarget) {
+    state.moveTarget = null;
+    state.stuckFrames = 0;
+  }
+
+  // Auto-drive toward target
+  if (state.moveTarget) {
+    const dx = state.moveTarget.x - c.x;
+    const dy = state.moveTarget.y - c.y;
+    const dist = Math.hypot(dx, dy);
+
+    if (dist < 12) {
+      // Arrived
+      state.moveTarget = null;
+      state.stuckFrames = 0;
+      c.speed *= 0.5;
+    } else {
+      const targetAngle = Math.atan2(dy, dx);
+      let angleDiff = targetAngle - c.angle;
+      while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+      while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+
+      // Turning rate scales mildly with speed but allows small in-place rotation
+      const baseTurn = 0.042;
+      const turnBoost = 0.02 * Math.min(1, Math.abs(c.speed) / 1.5);
+      const turnRate = baseTurn + turnBoost;
+      c.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), turnRate);
+
+      // Drive forward if roughly facing the target (~45° tolerance)
+      if (Math.abs(angleDiff) < 0.75) {
+        c.speed += CFG.CAR_ACCEL;
+      } else {
+        c.speed *= 0.93;
+      }
+
+      // Slow approach
+      if (dist < 70) c.speed = Math.min(c.speed, 1.2);
+      if (dist < 30) c.speed = Math.min(c.speed, 0.6);
+    }
+  }
+
+  // Manual WASD input
+  if (state.keys.up) c.speed += CFG.CAR_ACCEL;
+  if (state.keys.down) c.speed -= CFG.CAR_ACCEL * CFG.CAR_REVERSE_MULT;
+
+  const maxS = state.keys.boost ? CFG.CAR_MAX_SPEED * CFG.CAR_BOOST_MULT : CFG.CAR_MAX_SPEED;
+  c.speed = Math.max(-maxS * CFG.CAR_REVERSE_MULT, Math.min(maxS, c.speed));
+  c.speed *= (1 - CFG.CAR_FRICTION);
+  if (Math.abs(c.speed) < 0.02) c.speed = 0;
+
+  const turn = CFG.CAR_TURN * Math.min(1, Math.abs(c.speed) / 1.5);
+  if (state.keys.left) c.angle -= turn * Math.sign(c.speed || 1);
+  if (state.keys.right) c.angle += turn * Math.sign(c.speed || 1);
+
+  // Movement + collision
+  const prevX = c.x, prevY = c.y;
+  const nx = c.x + Math.cos(c.angle) * c.speed;
+  const ny = c.y + Math.sin(c.angle) * c.speed;
+  const collided = checkCollision(nx, ny, 14);
+  if (collided) {
+    c.speed *= 0.3;
+    if (!checkCollision(nx, c.y, 14)) c.x = nx;
+    else if (!checkCollision(c.x, ny, 14)) c.y = ny;
+  } else {
+    c.x = nx; c.y = ny;
+  }
+  c.x = Math.max(20, Math.min(CFG.MAP_W - 20, c.x));
+  c.y = Math.max(20, Math.min(CFG.MAP_H - 20, c.y));
+
+  // Stuck detection — if auto-drive isn't making progress, cancel target
+  if (state.moveTarget) {
+    const actualMove = Math.hypot(c.x - prevX, c.y - prevY);
+    if (actualMove < 0.3 && Math.abs(c.speed) < 0.3) {
+      state.stuckFrames++;
+      if (state.stuckFrames > 30) {
+        state.moveTarget = null;
+        state.stuckFrames = 0;
+      }
+    } else {
+      state.stuckFrames = 0;
+    }
+  }
+
+  if (justPressed.beacon) c.beacon = !c.beacon;
+  if (c.beacon) c.beaconT += 0.15;
+
+  // Camera
+  const lookX = c.x + Math.cos(c.angle) * CFG.CAM_LOOKAHEAD * (c.speed / CFG.CAR_MAX_SPEED);
+  const lookY = c.y + Math.sin(c.angle) * CFG.CAM_LOOKAHEAD * (c.speed / CFG.CAR_MAX_SPEED);
+  const targetX = lookX - CFG.VIEW_W / 2;
+  const targetY = lookY - CFG.VIEW_H / 2;
+  state.cam.x += (targetX - state.cam.x) * CFG.CAM_LERP;
+  state.cam.y += (targetY - state.cam.y) * CFG.CAM_LERP;
+  state.cam.x = Math.max(0, Math.min(CFG.MAP_W - CFG.VIEW_W, state.cam.x));
+  state.cam.y = Math.max(0, Math.min(CFG.MAP_H - CFG.VIEW_H, state.cam.y));
+
+  if (!state.dispatched && state.time >= state.dispatchTime) triggerDispatch();
+
+  // Snowflakes
+  for (const s of state.snowflakes) {
+    s.sway += 0.05;
+    s.x += s.vx + Math.sin(s.sway) * 0.3;
+    s.y += s.vy;
+    if (s.y > CFG.VIEW_H + 5) { s.y = -5; s.x = Math.random() * CFG.VIEW_W; }
+    if (s.x < -5) s.x = CFG.VIEW_W + 5;
+    if (s.x > CFG.VIEW_W + 5) s.x = -5;
+  }
+
+  // Smoke puffs
+  state.smokeTime++;
+  for (const sm of SMOKES) {
+    if (state.smokeTime % 45 === 0) {
+      const chimneyX = sm.b.x + sm.b.w * 0.72;
+      const chimneyTopY = sm.b.y + sm.b.h - (sm.b.wallHeight || 32) - (sm.b.roofHeight || 18) - 8;
+      sm.puffs.push({
+        x: chimneyX + 2,
+        y: chimneyTopY,
+        vy: -0.25 - Math.random() * 0.15,
+        vx: -0.1 + Math.random() * 0.2,
+        size: 3 + Math.random() * 2,
+        life: 120 + Math.random() * 40,
+        maxLife: 160,
+      });
+    }
+    for (const p of sm.puffs) {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.size *= 1.012;
+      p.life--;
+    }
+    sm.puffs = sm.puffs.filter(p => p.life > 0);
+  }
+
+  // Case marker proximity
+  if (state.caseMarker) {
+    const d = Math.hypot(state.car.x - state.caseMarker.x, state.car.y - state.caseMarker.y);
+    if (d < 80 && !state.caseMarker.arrived) {
+      state.caseMarker.arrived = true;
+      log('> 현장 도착. 집 앞 눈밭에 발자국이 하나뿐이다.', 'blood');
+      log('> 그리고 돌아오는 발자국은 없다.', 'blood');
+      document.getElementById('dispatch-status').textContent = 'ON SCENE';
+      document.getElementById('dispatch-status').className = 'hud-value blood';
+    } else if (d < 200 && !state.caseMarker.warned) {
+      state.caseMarker.warned = true;
+      log('> 지정 주소 근처 — 속도 낮추기', 'accent');
+    }
+  }
+
+  // Dialogue phase transitions — switch scripts when events occur
+  if (state.dispatched && state.dialogue.phase === 'calm') {
+    state.dialogue.phase = 'case';
+    state.dialogue.index = 0;
+    state.dialogue.charIndex = 0;
+    state.dialogue.state = 'typing';
+    state.dialogue.pauseTime = 0;
+    state.dialogue.startDelay = 30;
+    // keep history — conversation flows into the new phase
+  }
+  if (state.caseMarker && state.caseMarker.arrived && state.dialogue.phase !== 'arrived') {
+    state.dialogue.phase = 'arrived';
+    state.dialogue.index = 0;
+    state.dialogue.charIndex = 0;
+    state.dialogue.state = 'typing';
+    state.dialogue.pauseTime = 0;
+    state.dialogue.startDelay = 30;
+    state.dialogue.history = [];  // fresh start for arrival scene
+  }
+
+  updateDialogue();
+
+  // Interior entry — triggered by E when at scene, not already entering
+  if (state.caseMarker && state.caseMarker.arrived && justPressed.interact && !state.entering) {
+    state.entering = true;
+    state.enterFade = 0;
+    // stop the car
+    c.speed = 0;
+    state.moveTarget = null;
+    log('> 차에서 내린다. 눈 위 발자국을 따라 현관으로.', 'accent');
+  }
+  if (state.entering) {
+    state.enterFade = Math.min(1, state.enterFade + 0.012);
+    if (state.enterFade >= 1) {
+      // Save transition state for interior to pick up
+      try {
+        sessionStorage.setItem('lastpatrol_from_exterior', JSON.stringify({
+          case: 'CASE-0417',
+          address: '웨스트사이드 132번지',
+          time: '07:42',
+          enteredAt: Date.now(),
+        }));
+      } catch (e) {}
+      window.location.href = 'cop_robot_coop_prototype_v11.html';
+    }
+  }
+
+  for (const k in justPressed) delete justPressed[k];
+  updateHUD();
+}
+
+/* ---------- Dialogue update (typewriter + phase advance) ---------- */
+function updateDialogue() {
+  const d = state.dialogue;
+  if (d.state === 'done') return;
+  if (state.entering) return;  // freeze dialogue during fade-out
+  if (d.startDelay > 0) { d.startDelay--; return; }
+
+  const script = DIALOGUE_PHASES[d.phase];
+  if (!script || d.index >= script.length) {
+    d.state = 'done';
+    return;
+  }
+  const current = script[d.index];
+
+  if (d.state === 'typing') {
+    // 1 char per 3 frames
+    if (state.time % 3 === 0) {
+      d.charIndex++;
+      if (d.charIndex >= current.text.length) {
+        d.charIndex = current.text.length;
+        d.state = 'pausing';
+        d.pauseTime = 0;
+      }
+    }
+  } else if (d.state === 'pausing') {
+    d.pauseTime++;
+    // Pause proportional to line length, min 80 frames (~1.3s), max 160
+    const holdFrames = Math.min(160, Math.max(80, current.text.length * 5));
+    if (d.pauseTime > holdFrames) {
+      // Push completed line to history
+      d.history.push({ who: current.who, text: current.text });
+      if (d.history.length > 2) d.history.shift();
+      d.index++;
+      d.charIndex = 0;
+      if (d.index < script.length) {
+        d.state = 'typing';
+      } else {
+        d.state = 'done';
+      }
+    }
+  }
+}
+
+function checkCollision(x, y, radius) {
+  for (const b of BUILDINGS) {
+    if (x + radius > b.x && x - radius < b.x + b.w &&
+        y + radius > b.y && y - radius < b.y + b.h) return true;
+  }
+  return false;
+}
+
+function triggerDispatch() {
+  state.dispatched = true;
+  // Mark the case building (residence_case)
+  const caseBuilding = BUILDINGS.find(b => b.type === 'residence_case');
+  state.caseMarker = {
+    x: caseBuilding.x + caseBuilding.w / 2,
+    y: caseBuilding.y + caseBuilding.h + 25,   // just south of the house (front yard)
+    building: caseBuilding,
+    arrived: false,
+    warned: false,
+  };
+  log('━━ 무전 · CASE-0417 ━━', 'blood');
+  log('웨스트사이드 132번지. 주거지.', 'peace');
+  log('가족이 어제부터 연락을 받지 않습니다.', 'peace');
+  log('확인 바랍니다.', 'accent');
+  document.getElementById('dispatch-status').textContent = 'EN ROUTE';
+  document.getElementById('dispatch-status').className = 'hud-value accent';
+  const toast = document.getElementById('dispatch-toast');
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 6000);
+}
+
+/* ===================== RENDER ===================== */
+const canvas = document.getElementById('world');
+const ctx = canvas.getContext('2d');
+
+function render() {
+  drawSky();
+
+  // World draw with camera transform
+  ctx.save();
+  ctx.translate(-Math.floor(state.cam.x), -Math.floor(state.cam.y));
+
+  drawGround();
+  drawRoads();
+  drawSnowdrifts();
+  drawPeripheralWorldEffects();  // tire tracks on snow etc.
+
+  // Y-sort pass: buildings, trees, car, case marker
+  const renderList = [];
+  for (const b of BUILDINGS) renderList.push({
+    y: b.y + b.h,
+    draw: () => drawBuildingQuarterView(b),
+  });
+  for (const t of TREES) renderList.push({
+    y: t.y,
+    draw: () => drawTree(t),
+  });
+  renderList.push({
+    y: state.car.y,
+    draw: drawCar,
+  });
+  if (state.caseMarker) renderList.push({
+    y: state.caseMarker.y,
+    draw: drawCaseMarker,
+  });
+  renderList.sort((a, b) => a.y - b.y);
+  for (const o of renderList) o.draw();
+
+  // Move target marker (over world, under smoke/snow)
+  drawMoveTarget();
+
+  // Smoke (always on top, drifts up)
+  drawSmoke();
+
+  ctx.restore();
+
+  // Screen-space overlays
+  drawSnowfall();
+  drawMorningGlow();
+  drawDialogueOverlay();
+  drawInteractPrompt();
+  drawCursor();
+  drawEnterFade();
+}
+
+/* ---------- Sky / background gradient ---------- */
+function drawSky() {
+  const g = ctx.createLinearGradient(0, 0, 0, CFG.VIEW_H);
+  g.addColorStop(0, '#DEE3E8');
+  g.addColorStop(0.6, '#EADEC8');
+  g.addColorStop(1, '#F0E4D8');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, CFG.VIEW_W, CFG.VIEW_H);
+}
+
+/* ---------- Ground (snow-covered) ---------- */
+function drawGround() {
+  // Base snow — broken into gentle tonal bands for subtle variation
+  ctx.fillStyle = '#F0E8D8';
+  ctx.fillRect(0, 0, CFG.MAP_W, CFG.MAP_H);
+
+  // Cool shade patches (larger, soft)
+  ctx.fillStyle = 'rgba(200, 208, 216, 0.18)';
+  for (let i = 0; i < 20; i++) {
+    const sx = (Math.sin(i * 13.7) * 0.5 + 0.5) * CFG.MAP_W;
+    const sy = (Math.cos(i * 17.3) * 0.5 + 0.5) * CFG.MAP_H;
+    if (onRoad(sx, sy) || nearBuilding(sx, sy, 10)) continue;
+    ctx.beginPath();
+    ctx.ellipse(sx, sy, 50, 22, i * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Warm highlight patches (where the morning sun catches the snow)
+  ctx.fillStyle = 'rgba(255, 250, 240, 0.4)';
+  for (let i = 0; i < 15; i++) {
+    const sx = (Math.cos(i * 11.3) * 0.5 + 0.5) * CFG.MAP_W;
+    const sy = (Math.sin(i * 19.1) * 0.5 + 0.5) * CFG.MAP_H;
+    if (onRoad(sx, sy)) continue;
+    ctx.beginPath();
+    ctx.ellipse(sx, sy, 40, 18, i * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Subtle tiny grain for texture feel
+  ctx.fillStyle = 'rgba(200, 208, 216, 0.5)';
+  for (let i = 0; i < 120; i++) {
+    const sx = (Math.sin(i * 7.3 + 1.5) * 0.5 + 0.5) * CFG.MAP_W;
+    const sy = (Math.cos(i * 11.7 + 0.3) * 0.5 + 0.5) * CFG.MAP_H;
+    ctx.fillRect(sx, sy, 1, 1);
+  }
+}
+
+function onRoad(x, y) {
+  for (const r of ROADS) {
+    if (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) return true;
+  }
+  return false;
+}
+function nearBuilding(x, y, pad) {
+  for (const b of BUILDINGS) {
+    if (x > b.x - pad && x < b.x + b.w + pad && y > b.y - pad && y < b.y + b.h + pad) return true;
+  }
+  return false;
+}
+
+/* ---------- Roads (plowed, slushy) ---------- */
+function drawRoads() {
+  // Sidewalk (light snow-packed)
+  ctx.fillStyle = '#D8CEB8';
+  for (const r of ROADS) {
+    if (r.dir === 'h') {
+      ctx.fillRect(r.x, r.y - 4, r.w, 4);
+      ctx.fillRect(r.x, r.y + r.h, r.w, 4);
+    } else {
+      ctx.fillRect(r.x - 4, r.y, 4, r.h);
+      ctx.fillRect(r.x + r.w, r.y, 4, r.h);
+    }
+  }
+
+  // Road surface — plowed slush
+  ctx.fillStyle = '#9B9A96';
+  for (const r of ROADS) ctx.fillRect(r.x, r.y, r.w, r.h);
+
+  // Wet streaks (slightly darker)
+  ctx.fillStyle = 'rgba(70, 72, 78, 0.25)';
+  for (const r of ROADS) {
+    if (r.dir === 'h') {
+      ctx.fillRect(r.x, r.y + r.h * 0.4, r.w, 6);
+      ctx.fillRect(r.x, r.y + r.h * 0.7, r.w, 4);
+    } else {
+      ctx.fillRect(r.x + r.w * 0.4, r.y, 6, r.h);
+      ctx.fillRect(r.x + r.w * 0.7, r.y, 4, r.h);
+    }
+  }
+
+  // Remnant snow on road edges (imperfect plowing)
+  ctx.fillStyle = 'rgba(240, 232, 216, 0.7)';
+  for (const r of ROADS) {
+    if (r.dir === 'h') {
+      for (let x = r.x; x < r.x + r.w; x += 30) {
+        if (Math.sin(x * 0.13) > 0.2) {
+          ctx.fillRect(x, r.y, 22, 2);
+          ctx.fillRect(x + 6, r.y + r.h - 2, 18, 2);
+        }
+      }
+    } else {
+      for (let y = r.y; y < r.y + r.h; y += 30) {
+        if (Math.sin(y * 0.11) > 0.2) {
+          ctx.fillRect(r.x, y, 2, 22);
+          ctx.fillRect(r.x + r.w - 2, y + 6, 2, 18);
+        }
+      }
+    }
+  }
+
+  // Faint center line (buried under slush)
+  ctx.fillStyle = 'rgba(140, 130, 110, 0.35)';
+  for (const r of ROADS) {
+    if (r.dir === 'h') {
+      const cy = r.y + r.h / 2;
+      for (let x = r.x; x < r.x + r.w; x += 36) {
+        ctx.fillRect(x, cy - 0.5, 16, 1);
+      }
+    } else {
+      const cx = r.x + r.w / 2;
+      for (let y = r.y; y < r.y + r.h; y += 36) {
+        ctx.fillRect(cx - 0.5, y, 1, 16);
+      }
+    }
+  }
+}
+
+/* ---------- Snowdrifts (decorative) ---------- */
+function drawSnowdrifts() {
+  for (const s of SNOWDRIFTS) {
+    // Shadow
+    ctx.fillStyle = 'rgba(200, 208, 216, 0.35)';
+    ctx.beginPath();
+    ctx.ellipse(s.x + 3, s.y + 2, s.r * 1.1, s.r * 0.55, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Body
+    ctx.fillStyle = '#F0E8D8';
+    ctx.beginPath();
+    ctx.ellipse(s.x, s.y, s.r, s.r * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Highlight cap
+    ctx.fillStyle = '#FFFAF0';
+    ctx.beginPath();
+    ctx.ellipse(s.x - 2, s.y - 2, s.r * 0.7, s.r * 0.3, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawPeripheralWorldEffects() {
+  // Faint tire tracks on roads (where plow went through)
+  // Already baked into the road rendering above. Keep this hook for later.
+}
+
+/* ---------- Trees (bare, snowed on) ---------- */
+function drawTree(t) {
+  // Shadow on snow (east, soft)
+  ctx.fillStyle = 'rgba(74, 62, 52, 0.25)';
+  ctx.beginPath();
+  ctx.ellipse(t.x + 8, t.y + 4, 16, 5, -0.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Trunk
+  ctx.fillStyle = '#4A3E34';
+  ctx.fillRect(t.x - 2, t.y - 22, 4, 22);
+
+  // Bare branches (a few radiating lines)
+  ctx.strokeStyle = '#4A3E34';
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(t.x, t.y - 20); ctx.lineTo(t.x - 9, t.y - 30);
+  ctx.moveTo(t.x, t.y - 18); ctx.lineTo(t.x + 10, t.y - 26);
+  ctx.moveTo(t.x, t.y - 24); ctx.lineTo(t.x - 6, t.y - 34);
+  ctx.moveTo(t.x, t.y - 22); ctx.lineTo(t.x + 7, t.y - 32);
+  ctx.moveTo(t.x, t.y - 26); ctx.lineTo(t.x, t.y - 36);
+  ctx.stroke();
+
+  // Snow capping some branches
+  ctx.strokeStyle = '#FFFAF0';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(t.x - 1, t.y - 22); ctx.lineTo(t.x - 9, t.y - 30);
+  ctx.moveTo(t.x + 1, t.y - 26); ctx.lineTo(t.x, t.y - 36);
+  ctx.stroke();
+
+  // Snow mound at base
+  ctx.fillStyle = '#F0E8D8';
+  ctx.beginPath();
+  ctx.ellipse(t.x, t.y + 1, 8, 3, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/* ---------- Building (Quarter View) ---------- */
+function drawBuildingQuarterView(b) {
+  // Default geometry
+  const wallH = b.wallHeight || 32;
+  const roofH = b.roofHeight || 18;
+
+  if (b.type === 'residence' || b.type === 'residence_case') drawResidenceQV(b, wallH, roofH);
+  else if (b.type === 'church') drawChurchQV(b);
+  else if (b.type === 'motel') drawMotelQV(b, wallH);
+  else if (b.type === 'gasstation') drawGasStationQV(b);
+  else if (b.type === 'warehouse') drawWarehouseQV(b, wallH);
+  else if (b.type === 'apartment') drawApartmentQV(b);
+  else if (b.type === 'vacant') drawVacantQV(b);
+}
+
+// Base ground shadow pattern used by all buildings
+function drawBuildingShadow(b, length = 10) {
+  ctx.fillStyle = 'rgba(90, 80, 68, 0.25)';
+  ctx.beginPath();
+  ctx.moveTo(b.x + 2, b.y + b.h);
+  ctx.lineTo(b.x + b.w + 2, b.y + b.h);
+  ctx.lineTo(b.x + b.w + length, b.y + b.h + length);
+  ctx.lineTo(b.x + 2 + length, b.y + b.h + length);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawResidenceQV(b, wallH, roofH) {
+  drawBuildingShadow(b, 8);
+
+  const baseY = b.y + b.h;          // front wall base
+  const wallTopY = baseY - wallH;   // top of wall / eaves
+  const roofPeakY = wallTopY - roofH;
+  const eaveOverhang = 3;
+
+  const isCase = b.type === 'residence_case';
+
+  // Wall face (warm beige in morning sun)
+  ctx.fillStyle = isCase ? '#B8A894' : '#CBBDAA';
+  ctx.fillRect(b.x, wallTopY, b.w, wallH);
+
+  // Wall shade stripe (right side, away from sun — sun is from east/right, so shade is left)
+  ctx.fillStyle = 'rgba(140, 120, 100, 0.3)';
+  ctx.fillRect(b.x, wallTopY, 6, wallH);
+
+  // Subtle wall grain — horizontal siding lines
+  ctx.fillStyle = 'rgba(90, 74, 60, 0.12)';
+  for (let ly = wallTopY + 4; ly < baseY - 2; ly += 5) {
+    ctx.fillRect(b.x + 1, ly, b.w - 2, 1);
+  }
+
+  // Door
+  const doorX = b.x + b.w / 2 - 5;
+  const doorY = baseY - 16;
+  ctx.fillStyle = isCase ? '#3A2E28' : '#4A3828';
+  ctx.fillRect(doorX, doorY, 10, 16);
+  // If case site: door ajar (a sliver of darkness offset)
+  if (isCase) {
+    ctx.fillStyle = '#14141C';
+    ctx.fillRect(doorX - 2, doorY, 3, 16);
+  } else {
+    // Doorknob
+    ctx.fillStyle = '#D88A4A';
+    ctx.fillRect(doorX + 8, doorY + 7, 1, 1);
+  }
+
+  // Windows (in the wall face, arranged in a single row)
+  drawWindows(b, wallTopY + 4, wallH - 22, isCase);
+
+  // Roof (trapezoid, triangular peak style — gabled)
+  ctx.fillStyle = '#5A4A40';
+  ctx.beginPath();
+  ctx.moveTo(b.x - eaveOverhang, wallTopY);
+  ctx.lineTo(b.x + b.w + eaveOverhang, wallTopY);
+  ctx.lineTo(b.x + b.w - 4, roofPeakY);
+  ctx.lineTo(b.x + 4, roofPeakY);
+  ctx.closePath();
+  ctx.fill();
+
+  // Roof shadow line (under the eaves)
+  ctx.fillStyle = 'rgba(60, 48, 40, 0.5)';
+  ctx.fillRect(b.x - eaveOverhang, wallTopY, b.w + eaveOverhang * 2, 2);
+
+  // SNOW on the roof
+  ctx.fillStyle = '#FFFAF0';
+  ctx.beginPath();
+  ctx.moveTo(b.x - eaveOverhang - 1, wallTopY - 1);
+  ctx.lineTo(b.x + b.w + eaveOverhang + 1, wallTopY - 1);
+  // Roof rim: snow hangs slightly (undulation)
+  const bumps = 5;
+  for (let i = bumps; i >= 0; i--) {
+    const t = i / bumps;
+    const rx = b.x + b.w + eaveOverhang + 1 - (b.w + eaveOverhang * 2 + 2) * t;
+    const ry = wallTopY + 1 + Math.sin(i * 1.3) * 0.8;
+    if (i < bumps) ctx.lineTo(rx, ry);
+  }
+  ctx.lineTo(b.x - eaveOverhang - 1, wallTopY - 1);
+  // Approx: just fill as a thick snow band on top of roof
+  ctx.closePath();
+  ctx.fill();
+
+  // Actual thick snow on roof surface (covers ~60% of roof height from top)
+  ctx.fillStyle = '#F5EDDC';
+  ctx.beginPath();
+  ctx.moveTo(b.x - eaveOverhang + 1, wallTopY - 1);
+  ctx.lineTo(b.x + b.w + eaveOverhang - 1, wallTopY - 1);
+  ctx.lineTo(b.x + b.w - 6, roofPeakY + 4);
+  ctx.lineTo(b.x + 6, roofPeakY + 4);
+  ctx.closePath();
+  ctx.fill();
+
+  // Snow highlight on peak
+  ctx.fillStyle = '#FFFAF0';
+  ctx.beginPath();
+  ctx.moveTo(b.x + 4, roofPeakY);
+  ctx.lineTo(b.x + b.w - 4, roofPeakY);
+  ctx.lineTo(b.x + b.w - 6, roofPeakY + 3);
+  ctx.lineTo(b.x + 6, roofPeakY + 3);
+  ctx.closePath();
+  ctx.fill();
+
+  // Front snow drip (icicle-like hang on eave corners)
+  ctx.fillStyle = '#FFFAF0';
+  ctx.fillRect(b.x - eaveOverhang, wallTopY, 2, 4);
+  ctx.fillRect(b.x + b.w + eaveOverhang - 2, wallTopY, 2, 4);
+
+  // Chimney + snow cap
+  if (b.chimney) {
+    const cx = b.x + b.w * 0.72;
+    const cyTop = roofPeakY - 10;
+    ctx.fillStyle = '#4A3828';
+    ctx.fillRect(cx, cyTop, 6, (wallTopY - cyTop) - 2);
+    // Snow on chimney
+    ctx.fillStyle = '#FFFAF0';
+    ctx.fillRect(cx - 1, cyTop - 2, 8, 3);
+  }
+}
+
+function drawWindows(b, topY, height, isCase) {
+  const pattern = b.windows || '';
+  const cols = 3;
+  const rows = 2;
+  const wW = 11, wH = 10;
+  const padX = 16;
+  const gapX = (b.w - padX * 2 - cols * wW) / Math.max(1, cols - 1);
+  const gapY = 4;
+
+  let i = 0;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const ch = pattern[i] || '0';
+      i++;
+      if (ch === '.') continue;
+      const wx = b.x + padX + c * (wW + gapX);
+      const wy = topY + r * (wH + gapY);
+      // Frame (dark)
+      ctx.fillStyle = '#3A2E28';
+      ctx.fillRect(wx - 1, wy - 1, wW + 2, wH + 2);
+      if (ch === 'X' && isCase) {
+        // Broken window — shattered panes with dark interior
+        ctx.fillStyle = '#14141C';
+        ctx.fillRect(wx, wy, wW, wH);
+        // Crack lines
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(wx + 1, wy + 2); ctx.lineTo(wx + wW - 2, wy + wH - 1);
+        ctx.moveTo(wx + wW - 2, wy + 1); ctx.lineTo(wx + 2, wy + wH - 2);
+        ctx.moveTo(wx + wW / 2, wy); ctx.lineTo(wx + wW / 2 + 1, wy + wH);
+        ctx.stroke();
+      } else if (ch === '1') {
+        // Lit window (warm interior) — rare in daytime, but possible
+        ctx.fillStyle = '#FFCE6E';
+        ctx.fillRect(wx, wy, wW, wH);
+      } else {
+        // Normal window — dark interior (because inside is darker than outside)
+        ctx.fillStyle = '#3A4550';
+        ctx.fillRect(wx, wy, wW, wH);
+        // Subtle reflection highlight (sky reflecting)
+        ctx.fillStyle = 'rgba(222, 227, 232, 0.5)';
+        ctx.fillRect(wx, wy, wW, 2);
+        ctx.fillRect(wx, wy, 2, wH);
+      }
+      // Cross muntin
+      ctx.fillStyle = 'rgba(58, 46, 40, 0.6)';
+      ctx.fillRect(wx, wy + wH / 2 - 0.5, wW, 1);
+      ctx.fillRect(wx + wW / 2 - 0.5, wy, 1, wH);
+    }
+  }
+}
+
+function drawChurchQV(b) {
+  drawBuildingShadow(b, 12);
+
+  const baseY = b.y + b.h;
+  const wallH = 44;
+  const roofH = 32;
+  const wallTopY = baseY - wallH;
+  const roofPeakY = wallTopY - roofH;
+
+  // Wall
+  ctx.fillStyle = '#CBBDAA';
+  ctx.fillRect(b.x, wallTopY, b.w, wallH);
+  // Shade stripe
+  ctx.fillStyle = 'rgba(140, 120, 100, 0.3)';
+  ctx.fillRect(b.x, wallTopY, 6, wallH);
+
+  // Stone grain
+  ctx.fillStyle = 'rgba(90, 74, 60, 0.12)';
+  for (let ly = wallTopY + 6; ly < baseY - 4; ly += 7) {
+    ctx.fillRect(b.x + 2, ly, b.w - 4, 1);
+  }
+
+  // Arched window (central, large)
+  const awX = b.x + b.w / 2 - 10;
+  const awY = wallTopY + 8;
+  ctx.fillStyle = '#3A2E28';
+  ctx.beginPath();
+  ctx.moveTo(awX, awY + 22);
+  ctx.lineTo(awX, awY + 6);
+  ctx.quadraticCurveTo(awX + 10, awY - 4, awX + 20, awY + 6);
+  ctx.lineTo(awX + 20, awY + 22);
+  ctx.closePath();
+  ctx.fill();
+  // Stained glass (soft amber)
+  ctx.fillStyle = '#D8B88A';
+  ctx.beginPath();
+  ctx.moveTo(awX + 1.5, awY + 21);
+  ctx.lineTo(awX + 1.5, awY + 7);
+  ctx.quadraticCurveTo(awX + 10, awY - 2.5, awX + 18.5, awY + 7);
+  ctx.lineTo(awX + 18.5, awY + 21);
+  ctx.closePath();
+  ctx.fill();
+  // Muntin cross
+  ctx.fillStyle = '#3A2E28';
+  ctx.fillRect(awX + 9.5, awY + 2, 1, 20);
+  ctx.fillRect(awX + 1, awY + 12, 19, 1);
+
+  // Door (arched, centered at base)
+  const dX = b.x + b.w / 2 - 7;
+  const dY = baseY - 20;
+  ctx.fillStyle = '#3A2420';
+  ctx.beginPath();
+  ctx.moveTo(dX, baseY);
+  ctx.lineTo(dX, dY + 5);
+  ctx.quadraticCurveTo(dX + 7, dY - 3, dX + 14, dY + 5);
+  ctx.lineTo(dX + 14, baseY);
+  ctx.closePath();
+  ctx.fill();
+
+  // Roof (steep gable)
+  ctx.fillStyle = '#4A3828';
+  ctx.beginPath();
+  ctx.moveTo(b.x - 4, wallTopY);
+  ctx.lineTo(b.x + b.w + 4, wallTopY);
+  ctx.lineTo(b.x + b.w / 2, roofPeakY);
+  ctx.closePath();
+  ctx.fill();
+
+  // SNOW on roof
+  ctx.fillStyle = '#F5EDDC';
+  ctx.beginPath();
+  ctx.moveTo(b.x - 3, wallTopY - 1);
+  ctx.lineTo(b.x + b.w + 3, wallTopY - 1);
+  ctx.lineTo(b.x + b.w / 2, roofPeakY + 6);
+  ctx.closePath();
+  ctx.fill();
+  // Snow peak highlight
+  ctx.fillStyle = '#FFFAF0';
+  ctx.beginPath();
+  ctx.moveTo(b.x + 3, wallTopY - 1);
+  ctx.lineTo(b.x + b.w - 3, wallTopY - 1);
+  ctx.lineTo(b.x + b.w / 2, roofPeakY + 3);
+  ctx.closePath();
+  ctx.fill();
+
+  // Steeple
+  const stX = b.x + b.w / 2 - 3;
+  const stTopY = roofPeakY - 30;
+  ctx.fillStyle = '#4A3828';
+  ctx.fillRect(stX, stTopY + 8, 6, 22);
+  // Steeple roof (small pyramid)
+  ctx.fillStyle = '#3E2E22';
+  ctx.beginPath();
+  ctx.moveTo(stX - 1, stTopY + 8);
+  ctx.lineTo(stX + 7, stTopY + 8);
+  ctx.lineTo(stX + 3, stTopY - 8);
+  ctx.closePath();
+  ctx.fill();
+  // Snow on steeple peak
+  ctx.fillStyle = '#FFFAF0';
+  ctx.fillRect(stX - 1, stTopY + 7, 8, 2);
+  ctx.beginPath();
+  ctx.moveTo(stX + 1, stTopY + 4);
+  ctx.lineTo(stX + 5, stTopY + 4);
+  ctx.lineTo(stX + 3, stTopY - 7);
+  ctx.closePath();
+  ctx.fill();
+
+  // Cross on steeple
+  ctx.fillStyle = '#4A3828';
+  ctx.fillRect(stX + 2.5, stTopY - 16, 1, 8);
+  ctx.fillRect(stX + 1, stTopY - 13, 4, 1);
+}
+
+function drawMotelQV(b, wallH) {
+  drawBuildingShadow(b, 8);
+  const baseY = b.y + b.h;
+  const wallTopY = baseY - wallH;
+
+  // Main wall
+  ctx.fillStyle = '#CBBDAA';
+  ctx.fillRect(b.x, wallTopY, b.w, wallH);
+  ctx.fillStyle = 'rgba(140, 120, 100, 0.3)';
+  ctx.fillRect(b.x, wallTopY, 6, wallH);
+
+  // Row of doors (motel — one door per unit)
+  const unitW = 22;
+  const unitCount = Math.floor(b.w / unitW);
+  const unitStart = b.x + (b.w - unitCount * unitW) / 2;
+  for (let i = 0; i < unitCount; i++) {
+    const dx = unitStart + i * unitW + 4;
+    ctx.fillStyle = i % 2 === 0 ? '#4A3828' : '#3A2E28';
+    ctx.fillRect(dx, baseY - 16, 10, 16);
+  }
+  // Small number plates (warm)
+  ctx.fillStyle = '#D88A4A';
+  for (let i = 0; i < unitCount; i++) {
+    const dx = unitStart + i * unitW + 14;
+    ctx.fillRect(dx, baseY - 14, 3, 3);
+  }
+
+  // Windows (smaller)
+  drawWindows(b, wallTopY + 4, wallH - 22, false);
+
+  // Flat roof with slight overhang
+  ctx.fillStyle = '#4A3828';
+  ctx.fillRect(b.x - 4, wallTopY - 6, b.w + 8, 8);
+
+  // SNOW on flat roof — thick layer
+  ctx.fillStyle = '#FFFAF0';
+  ctx.fillRect(b.x - 5, wallTopY - 10, b.w + 10, 5);
+  ctx.fillStyle = '#F5EDDC';
+  ctx.fillRect(b.x - 5, wallTopY - 7, b.w + 10, 2);
+
+  // MOTEL sign — roadside pylon on the left
+  const sx = b.x + 8;
+  const syTop = wallTopY - 38;
+  ctx.fillStyle = '#4A3828';
+  ctx.fillRect(sx + 2, syTop + 20, 4, wallTopY - (syTop + 20));
+  // Sign panel
+  ctx.fillStyle = '#E8DFCC';
+  ctx.fillRect(sx - 4, syTop, 18, 22);
+  ctx.strokeStyle = '#4A3828';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(sx - 4, syTop, 18, 22);
+  // Sign text MOTEL (ink on paper, not neon)
+  ctx.fillStyle = '#3A2E28';
+  ctx.font = 'bold 7px "IBM Plex Mono", monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('MOTEL', sx + 5, syTop + 11);
+  // Snow on sign top
+  ctx.fillStyle = '#FFFAF0';
+  ctx.fillRect(sx - 5, syTop - 1, 20, 3);
+
+  // "VACANCY" lit below in warm amber — the one warm note
+  ctx.fillStyle = '#D88A4A';
+  ctx.font = 'bold 5px "IBM Plex Mono", monospace';
+  ctx.fillText('VACANCY', sx + 5, syTop + 18);
+}
+
+function drawGasStationQV(b) {
+  drawBuildingShadow(b, 10);
+
+  const baseY = b.y + b.h;
+  const wallH = 28;
+  const wallTopY = baseY - wallH;
+
+  // Small kiosk (smaller than footprint)
+  const kX = b.x + b.w / 2 - 30;
+  const kW = 60;
+  ctx.fillStyle = '#CBBDAA';
+  ctx.fillRect(kX, wallTopY, kW, wallH);
+  ctx.fillStyle = 'rgba(140, 120, 100, 0.3)';
+  ctx.fillRect(kX, wallTopY, 4, wallH);
+
+  // Kiosk window (large front window)
+  ctx.fillStyle = '#3A4550';
+  ctx.fillRect(kX + 8, wallTopY + 6, kW - 16, 14);
+  ctx.fillStyle = 'rgba(222, 227, 232, 0.5)';
+  ctx.fillRect(kX + 8, wallTopY + 6, kW - 16, 2);
+  // Door
+  ctx.fillStyle = '#4A3828';
+  ctx.fillRect(kX + kW - 16, baseY - 14, 8, 14);
+
+  // Kiosk roof (flat)
+  ctx.fillStyle = '#4A3828';
+  ctx.fillRect(kX - 3, wallTopY - 4, kW + 6, 6);
+  // Snow on kiosk roof
+  ctx.fillStyle = '#FFFAF0';
+  ctx.fillRect(kX - 4, wallTopY - 7, kW + 8, 4);
+
+  // Canopy (large, extends forward over pumps)
+  const canY = baseY - 52;
+  const canH = 10;
+  ctx.fillStyle = '#5A4A40';
+  ctx.fillRect(b.x - 4, canY, b.w + 8, canH);
+  ctx.fillStyle = '#4A3828';
+  ctx.fillRect(b.x - 4, canY + canH, b.w + 8, 3);
+  // Snow on canopy
+  ctx.fillStyle = '#FFFAF0';
+  ctx.fillRect(b.x - 5, canY - 4, b.w + 10, 5);
+  ctx.fillStyle = '#F5EDDC';
+  ctx.fillRect(b.x - 5, canY - 1, b.w + 10, 2);
+
+  // Canopy support columns
+  ctx.fillStyle = '#3A2E28';
+  ctx.fillRect(b.x + 2, canY + canH, 4, baseY - (canY + canH));
+  ctx.fillRect(b.x + b.w - 6, canY + canH, 4, baseY - (canY + canH));
+
+  // Gas pumps (two) — between columns, front yard
+  const pumpY = baseY - 14;
+  const pumps = [b.x + 20, b.x + b.w - 28];
+  for (const px of pumps) {
+    ctx.fillStyle = '#3A2E28';
+    ctx.fillRect(px, pumpY - 4, 10, 4);
+    ctx.fillStyle = '#E8DFCC';
+    ctx.fillRect(px + 1, pumpY - 12, 8, 8);
+    // Small warm display
+    ctx.fillStyle = '#D88A4A';
+    ctx.fillRect(px + 2, pumpY - 10, 6, 3);
+    // Base
+    ctx.fillStyle = '#3A2E28';
+    ctx.fillRect(px + 2, pumpY, 6, 3);
+    // Snow cap
+    ctx.fillStyle = '#FFFAF0';
+    ctx.fillRect(px + 1, pumpY - 13, 8, 2);
+  }
+
+  // "GAS" sign on canopy front edge
+  ctx.fillStyle = '#E8DFCC';
+  ctx.fillRect(b.x + b.w / 2 - 14, canY - 2, 28, 10);
+  ctx.strokeStyle = '#4A3828';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(b.x + b.w / 2 - 14, canY - 2, 28, 10);
+  ctx.fillStyle = '#3A2E28';
+  ctx.font = 'bold 7px "IBM Plex Mono", monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('GAS', b.x + b.w / 2, canY + 3);
+}
+
+function drawWarehouseQV(b, wallH) {
+  drawBuildingShadow(b, 10);
+  const baseY = b.y + b.h;
+  const wallTopY = baseY - wallH;
+  const roofPeakY = wallTopY - 10;
+
+  // Wall — greyer than residence, industrial
+  ctx.fillStyle = '#A89F93';
+  ctx.fillRect(b.x, wallTopY, b.w, wallH);
+  ctx.fillStyle = 'rgba(90, 74, 60, 0.28)';
+  ctx.fillRect(b.x, wallTopY, 6, wallH);
+
+  // Loading door (large central)
+  ctx.fillStyle = '#4A3E34';
+  ctx.fillRect(b.x + b.w / 2 - 18, baseY - 24, 36, 24);
+  // Panel lines on loading door
+  ctx.fillStyle = 'rgba(30, 20, 14, 0.4)';
+  for (let pl = 0; pl < 4; pl++) {
+    ctx.fillRect(b.x + b.w / 2 - 18, baseY - 24 + pl * 6, 36, 1);
+  }
+
+  // Small high windows
+  const wW = 8, wH = 6;
+  const winY = wallTopY + 6;
+  for (let i = 0; i < 3; i++) {
+    const wx = b.x + 16 + i * ((b.w - 32) / 2);
+    ctx.fillStyle = '#3A2E28';
+    ctx.fillRect(wx - 1, winY - 1, wW + 2, wH + 2);
+    ctx.fillStyle = '#3A4550';
+    ctx.fillRect(wx, winY, wW, wH);
+    ctx.fillStyle = 'rgba(222, 227, 232, 0.5)';
+    ctx.fillRect(wx, winY, wW, 1.5);
+  }
+
+  // Corrugated roof (flat-ish peak)
+  ctx.fillStyle = '#4A3828';
+  ctx.beginPath();
+  ctx.moveTo(b.x - 4, wallTopY);
+  ctx.lineTo(b.x + b.w + 4, wallTopY);
+  ctx.lineTo(b.x + b.w - 8, roofPeakY);
+  ctx.lineTo(b.x + 8, roofPeakY);
+  ctx.closePath();
+  ctx.fill();
+
+  // SNOW on roof
+  ctx.fillStyle = '#F5EDDC';
+  ctx.beginPath();
+  ctx.moveTo(b.x - 3, wallTopY - 1);
+  ctx.lineTo(b.x + b.w + 3, wallTopY - 1);
+  ctx.lineTo(b.x + b.w - 10, roofPeakY + 2);
+  ctx.lineTo(b.x + 10, roofPeakY + 2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#FFFAF0';
+  ctx.fillRect(b.x + 12, roofPeakY, b.w - 24, 2);
+}
+
+function drawApartmentQV(b) {
+  drawBuildingShadow(b, 14);
+  const baseY = b.y + b.h;
+  const wallH = 60;
+  const wallTopY = baseY - wallH;
+
+  // Wall (taller)
+  ctx.fillStyle = '#CBBDAA';
+  ctx.fillRect(b.x, wallTopY, b.w, wallH);
+  ctx.fillStyle = 'rgba(140, 120, 100, 0.3)';
+  ctx.fillRect(b.x, wallTopY, 8, wallH);
+
+  // Brick grain
+  ctx.fillStyle = 'rgba(90, 74, 60, 0.12)';
+  for (let ly = wallTopY + 4; ly < baseY - 2; ly += 5) {
+    ctx.fillRect(b.x + 2, ly, b.w - 4, 1);
+  }
+
+  // Dense grid of small windows (4 columns, 3 rows)
+  const pattern = b.windows || '';
+  const cols = 4, rows = 3;
+  const wW = 9, wH = 10;
+  const padX = 14, padY = 10;
+  const gapX = (b.w - padX * 2 - cols * wW) / (cols - 1);
+  const gapY = 4;
+  let i = 0;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const ch = pattern[i] || '0';
+      i++;
+      const wx = b.x + padX + c * (wW + gapX);
+      const wy = wallTopY + padY + r * (wH + gapY);
+      ctx.fillStyle = '#3A2E28';
+      ctx.fillRect(wx - 1, wy - 1, wW + 2, wH + 2);
+      if (ch === '1') {
+        ctx.fillStyle = '#FFCE6E';
+        ctx.fillRect(wx, wy, wW, wH);
+      } else {
+        ctx.fillStyle = '#3A4550';
+        ctx.fillRect(wx, wy, wW, wH);
+        ctx.fillStyle = 'rgba(222, 227, 232, 0.5)';
+        ctx.fillRect(wx, wy, wW, 1.5);
+      }
+    }
+  }
+
+  // Main door (centered)
+  ctx.fillStyle = '#4A3828';
+  ctx.fillRect(b.x + b.w / 2 - 7, baseY - 18, 14, 18);
+  ctx.fillStyle = '#D88A4A';
+  ctx.fillRect(b.x + b.w / 2 + 4, baseY - 10, 1, 1);
+
+  // Flat roof
+  ctx.fillStyle = '#4A3828';
+  ctx.fillRect(b.x - 3, wallTopY - 4, b.w + 6, 5);
+  // SNOW on flat roof (thick)
+  ctx.fillStyle = '#FFFAF0';
+  ctx.fillRect(b.x - 4, wallTopY - 9, b.w + 8, 5);
+  ctx.fillStyle = '#F5EDDC';
+  ctx.fillRect(b.x - 4, wallTopY - 5, b.w + 8, 2);
+
+  // Rooftop water tank
+  const tX = b.x + b.w - 22;
+  const tY = wallTopY - 24;
+  ctx.fillStyle = '#4A3828';
+  ctx.fillRect(tX, tY, 16, 15);
+  // Snow cap on tank
+  ctx.fillStyle = '#FFFAF0';
+  ctx.fillRect(tX - 1, tY - 2, 18, 3);
+}
+
+function drawVacantQV(b) {
+  // Empty snowy lot — chain-link fence, mounds of snow
+  // No shadow (no building), just a subtle perimeter
+  ctx.fillStyle = 'rgba(200, 208, 216, 0.25)';
+  ctx.fillRect(b.x, b.y, b.w, b.h);
+
+  // Fence posts (dark, sticking up out of snow)
+  ctx.fillStyle = '#4A3828';
+  for (let fx = b.x; fx <= b.x + b.w; fx += 20) {
+    ctx.fillRect(fx - 1, b.y - 4, 2, 8);
+    ctx.fillRect(fx - 1, b.y + b.h - 4, 2, 8);
+  }
+  for (let fy = b.y; fy <= b.y + b.h; fy += 20) {
+    ctx.fillRect(b.x - 1, fy - 1, 3, 2);
+    ctx.fillRect(b.x + b.w - 2, fy - 1, 3, 2);
+  }
+
+  // Snow caps on posts
+  ctx.fillStyle = '#FFFAF0';
+  for (let fx = b.x; fx <= b.x + b.w; fx += 20) {
+    ctx.fillRect(fx - 1, b.y - 6, 3, 2);
+    ctx.fillRect(fx - 1, b.y + b.h - 6, 3, 2);
+  }
+
+  // Random snow mounds inside lot
+  ctx.fillStyle = '#F0E8D8';
+  ctx.beginPath();
+  ctx.ellipse(b.x + b.w * 0.35, b.y + b.h * 0.55, 14, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(b.x + b.w * 0.7, b.y + b.h * 0.4, 10, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Highlights
+  ctx.fillStyle = '#FFFAF0';
+  ctx.beginPath();
+  ctx.ellipse(b.x + b.w * 0.35 - 2, b.y + b.h * 0.55 - 2, 10, 3, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/* ---------- Car (top view, palette-adjusted) ---------- */
+function drawCar() {
+  const c = state.car;
+  ctx.save();
+  ctx.translate(c.x, c.y);
+  // Ground shadow (soft, to east)
+  ctx.fillStyle = 'rgba(74, 62, 52, 0.3)';
+  ctx.beginPath();
+  ctx.ellipse(3, 3, 18, 8, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.rotate(c.angle);
+  // Body — classic police dark navy blue
+  ctx.fillStyle = '#2A4A6E';
+  roundRect(-16, -8, 32, 16, 3);
+  ctx.fill();
+  // Roof panel (slightly darker)
+  ctx.fillStyle = '#1E3450';
+  ctx.fillRect(-10, -7, 18, 14);
+  // White stripe running side-to-side (police livery)
+  ctx.fillStyle = '#F0E8D8';
+  ctx.fillRect(-14, -2, 28, 4);
+  // Windshield
+  ctx.fillStyle = '#5A6A7A';
+  ctx.fillRect(-4, -6, 6, 12);
+  // Roof beacon housing
+  ctx.fillStyle = '#14141C';
+  ctx.fillRect(-5, -4, 10, 8);
+  // Beacon lights
+  if (c.beacon) {
+    const phase = Math.floor(c.beaconT * 2) % 2;
+    const rOn = phase === 0, bOn = phase === 1;
+    ctx.fillStyle = rOn ? '#C84848' : '#3A1820';
+    ctx.fillRect(-4.5, -3, 4, 3);
+    ctx.fillStyle = bOn ? '#7CC8D8' : '#1A3038';
+    ctx.fillRect(0.5, -3, 4, 3);
+  } else {
+    // Unlit beacons
+    ctx.fillStyle = '#6A2A28';
+    ctx.fillRect(-4.5, -3, 4, 3);
+    ctx.fillStyle = '#284854';
+    ctx.fillRect(0.5, -3, 4, 3);
+  }
+  // "POLICE" micro text on door
+  ctx.fillStyle = '#F0E8D8';
+  ctx.font = 'bold 4px "IBM Plex Mono", monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('POLICE', 0, 0);
+  // Tires (dark bumps)
+  ctx.fillStyle = '#14141C';
+  ctx.fillRect(-13, -10, 5, 2);
+  ctx.fillRect(-13, 8, 5, 2);
+  ctx.fillRect(8, -10, 5, 2);
+  ctx.fillRect(8, 8, 5, 2);
+  // Snow dusting on roof
+  ctx.fillStyle = 'rgba(240, 232, 216, 0.5)';
+  ctx.fillRect(-9, -6, 5, 3);
+  ctx.fillRect(3, -6, 4, 2);
+  ctx.restore();
+
+  // Beacon ground spill (bright palette, more subtle than night)
+  if (c.beacon) {
+    const phase = Math.floor(c.beaconT * 2) % 2;
+    const spillCol = phase === 0 ? 'rgba(200, 72, 72, ' : 'rgba(124, 200, 216, ';
+    const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, 60);
+    g.addColorStop(0, spillCol + '0.32)');
+    g.addColorStop(1, spillCol + '0)');
+    ctx.save();
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.fillStyle = g;
+    ctx.fillRect(c.x - 60, c.y - 60, 120, 120);
+    ctx.restore();
+  }
+}
+
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+/* ---------- Case Marker (DIEGETIC — footprints + blood) ---------- */
+function drawCaseMarker() {
+  const m = state.caseMarker;
+  if (!m) return;
+  const b = m.building;
+
+  // The trail leads FROM the sidewalk/road TO the door.
+  // Door position (approx)
+  const doorX = b.x + b.w / 2;
+  const doorY = b.y + b.h;
+  // Trail start (south, near road)
+  const startX = doorX + 6;
+  const startY = doorY + 35;
+
+  // 1. Footprints in snow — row of small dark ovals, curving from start to door
+  const steps = 8;
+  for (let i = 0; i < steps; i++) {
+    const t = i / (steps - 1);
+    const fx = startX + (doorX - startX) * t + Math.sin(t * Math.PI) * 3;
+    const fy = startY + (doorY - startY) * t;
+    // Alternate left/right foot offset
+    const side = (i % 2 === 0) ? -2 : 2;
+    ctx.fillStyle = 'rgba(74, 62, 52, 0.55)';
+    ctx.beginPath();
+    ctx.ellipse(fx + side, fy, 2.2, 1.3, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // 2. Blood spots — starting near the door, a few drops trailing back
+  ctx.fillStyle = '#A8302A';
+  // Cluster near the door
+  ctx.beginPath();
+  ctx.ellipse(doorX - 4, doorY + 2, 3, 1.8, 0.3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(doorX + 6, doorY + 5, 2.2, 1.3, -0.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(doorX + 1, doorY + 7, 1.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(doorX - 7, doorY + 10, 1, 0, Math.PI * 2);
+  ctx.fill();
+  // A few smaller drops trailing toward the footprints
+  ctx.beginPath();
+  ctx.arc(doorX + 2, doorY + 14, 0.9, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(doorX - 1, doorY + 20, 0.7, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 3. Very subtle "investigate here" soft glow, only when close enough (no lurid HUD)
+  if (m.arrived) {
+    const t = state.time;
+    const pulse = 0.4 + 0.3 * Math.sin(t * 0.08);
+    const g = ctx.createRadialGradient(doorX, doorY + 5, 0, doorX, doorY + 5, 50);
+    g.addColorStop(0, `rgba(168, 48, 42, ${0.15 * pulse})`);
+    g.addColorStop(1, 'rgba(168, 48, 42, 0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(doorX - 50, doorY - 45, 100, 100);
+  }
+}
+
+/* ---------- Smoke (chimney puffs drifting up) ---------- */
+function drawSmoke() {
+  for (const sm of SMOKES) {
+    for (const p of sm.puffs) {
+      const alpha = Math.max(0, Math.min(1, p.life / p.maxLife)) * 0.4;
+      ctx.fillStyle = `rgba(210, 205, 198, ${alpha})`;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+/* ---------- Screen-space overlays ---------- */
+function drawSnowfall() {
+  ctx.save();
+  for (const s of state.snowflakes) {
+    ctx.fillStyle = `rgba(255, 255, 255, ${s.alpha})`;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawMorningGlow() {
+  // Soft warm glow from upper-right (morning sun direction)
+  const g = ctx.createRadialGradient(
+    CFG.VIEW_W * 0.8, 40, 0,
+    CFG.VIEW_W * 0.8, 40, CFG.VIEW_W * 0.9
+  );
+  g.addColorStop(0, 'rgba(255, 220, 170, 0.18)');
+  g.addColorStop(0.5, 'rgba(255, 220, 170, 0.05)');
+  g.addColorStop(1, 'rgba(255, 220, 170, 0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, CFG.VIEW_W, CFG.VIEW_H);
+
+  // Subtle cold vignette at bottom-left corner
+  const vg = ctx.createRadialGradient(
+    0, CFG.VIEW_H, 0,
+    0, CFG.VIEW_H, CFG.VIEW_W * 0.7
+  );
+  vg.addColorStop(0, 'rgba(200, 208, 216, 0.18)');
+  vg.addColorStop(1, 'rgba(200, 208, 216, 0)');
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, CFG.VIEW_W, CFG.VIEW_H);
+}
+
+/* Drive target marker — world space (drawn inside camera transform) */
+function drawMoveTarget() {
+  if (!state.moveTarget) return;
+  const mt = state.moveTarget;
+  const t = state.time;
+  const size = 10 + Math.sin(t * 0.18) * 2;
+  // Dark ink color on bright snow palette (not a neon UI ring)
+  const col = state.stuckFrames > 10 ? '168, 48, 42' : '58, 46, 40';
+  const alpha = state.stuckFrames > 10 ? 0.8 : 0.75;
+
+  ctx.save();
+  // Outer dashed ring
+  ctx.strokeStyle = `rgba(${col}, ${alpha})`;
+  ctx.lineWidth = 1.3;
+  ctx.setLineDash([4, 3]);
+  ctx.lineDashOffset = -t * 0.4;
+  ctx.beginPath();
+  ctx.arc(mt.x, mt.y, size, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Center dot
+  ctx.fillStyle = `rgba(${col}, ${alpha})`;
+  ctx.beginPath();
+  ctx.arc(mt.x, mt.y, 1.8, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Corner brackets
+  ctx.strokeStyle = `rgba(${col}, ${alpha * 0.65})`;
+  ctx.lineWidth = 1;
+  const off = size + 3, blen = 3;
+  ctx.beginPath();
+  ctx.moveTo(mt.x - off, mt.y - 2); ctx.lineTo(mt.x - off, mt.y + 2);
+  ctx.moveTo(mt.x - off - blen, mt.y); ctx.lineTo(mt.x - off + 1, mt.y);
+  ctx.moveTo(mt.x + off, mt.y - 2); ctx.lineTo(mt.x + off, mt.y + 2);
+  ctx.moveTo(mt.x + off + blen, mt.y); ctx.lineTo(mt.x + off - 1, mt.y);
+  ctx.moveTo(mt.x - 2, mt.y - off); ctx.lineTo(mt.x + 2, mt.y - off);
+  ctx.moveTo(mt.x, mt.y - off - blen); ctx.lineTo(mt.x, mt.y - off + 1);
+  ctx.moveTo(mt.x - 2, mt.y + off); ctx.lineTo(mt.x + 2, mt.y + off);
+  ctx.moveTo(mt.x, mt.y + off + blen); ctx.lineTo(mt.x, mt.y + off - 1);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/* Cursor crosshair — screen space */
+function drawCursor() {
+  const mx = state.mouse.x, my = state.mouse.y;
+  if (mx === 0 && my === 0) return;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(58, 46, 40, 0.7)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(mx, my, 6, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(mx - 10, my); ctx.lineTo(mx - 4, my);
+  ctx.moveTo(mx + 4, my); ctx.lineTo(mx + 10, my);
+  ctx.moveTo(mx, my - 10); ctx.lineTo(mx, my - 4);
+  ctx.moveTo(mx, my + 4); ctx.lineTo(mx, my + 10);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(58, 46, 40, 0.9)';
+  ctx.fillRect(mx - 0.5, my - 0.5, 1, 1);
+  ctx.restore();
+}
+
+/* ---------- Dialogue — routes to HTML panel (shared with interior v10) ---------- */
+let lastDialogueSignature = '';
+function drawDialogueOverlay() {
+  const d = state.dialogue;
+  const script = DIALOGUE_PHASES[d.phase];
+  let currentWho = null;
+  let currentText = '';
+  let typing = false;
+
+  if (script && d.index < script.length && d.startDelay <= 0) {
+    const current = script[d.index];
+    currentWho = current.who;
+    currentText = current.text.substring(0, d.charIndex);
+    typing = d.state === 'typing';
+  } else if (d.history.length > 0) {
+    // Show last history line if no active dialogue
+    const last = d.history[d.history.length - 1];
+    currentWho = last.who;
+    currentText = last.text;
+    typing = false;
+  }
+
+  if (currentWho === null) {
+    // Default idle line based on phase
+    currentWho = 'cop';
+    currentText = d.phase === 'calm' ? '조용한 아침이군.' :
+                  d.phase === 'case' ? '...' :
+                  '현장 도착.';
+  }
+
+  // Update HTML panel only if content changed
+  const sig = `${currentWho}|${currentText}|${typing}`;
+  if (sig !== lastDialogueSignature) {
+    lastDialogueSignature = sig;
+    const panel = document.getElementById('dialogue-panel');
+    if (panel) {
+      panel.classList.remove('cyan', 'amber', 'blood', 'subtle');
+      panel.classList.add(currentWho === 'cop' ? 'amber' : 'cyan');
+      const speakerEl = document.getElementById('dialogue-speaker');
+      const textEl = document.getElementById('dialogue-text');
+      if (speakerEl) speakerEl.textContent = currentWho === 'cop' ? 'MAREN · 경찰' : 'M-07 · 로봇';
+      if (textEl) {
+        textEl.textContent = currentText;
+        if (typing) textEl.classList.add('typing');
+        else textEl.classList.remove('typing');
+      }
+      // Redraw profile when speaker changes
+      const profileCanvas = document.getElementById('dialogue-profile');
+      if (profileCanvas && profileCanvas.dataset.who !== currentWho) {
+        profileCanvas.dataset.who = currentWho;
+        drawHtmlProfile(currentWho);
+      }
+    }
+  }
+}
+
+function drawHtmlProfile(who) {
+  const canvas = document.getElementById('dialogue-profile');
+  if (!canvas) return;
+  const p = canvas.getContext('2d');
+  p.imageSmoothingEnabled = false;
+  p.fillStyle = '#1A1A24';
+  p.fillRect(0, 0, 64, 64);
+  p.fillStyle = 'rgba(245, 238, 224, 0.03)';
+  for (let y = 0; y < 64; y += 2) p.fillRect(0, y, 64, 1);
+
+  if (who === 'cop') {
+    // CALEB pixel face
+    p.fillStyle = '#2A2A38'; p.fillRect(6, 48, 52, 16);
+    p.fillStyle = '#1E1E28'; p.fillRect(6, 60, 52, 4);
+    p.fillStyle = '#FFCE6E'; p.fillRect(18, 52, 4, 4);
+    p.fillRect(20, 50, 2, 2); p.fillRect(20, 56, 2, 2);
+    p.fillStyle = '#B08060'; p.fillRect(28, 42, 8, 8);
+    p.fillStyle = '#906040'; p.fillRect(28, 48, 8, 2);
+    p.fillStyle = '#C9A078'; p.fillRect(22, 16, 20, 28);
+    p.fillStyle = '#A88058'; p.fillRect(36, 18, 6, 24);
+    p.fillStyle = '#D8B088'; p.fillRect(22, 16, 4, 24);
+    p.fillStyle = '#1A1A24'; p.fillRect(18, 8, 28, 10);
+    p.fillRect(20, 6, 24, 2);
+    p.fillStyle = '#0A0A12'; p.fillRect(18, 16, 28, 2);
+    p.fillStyle = '#FFCE6E'; p.fillRect(18, 14, 28, 1);
+    p.fillStyle = '#FFFFFF';
+    p.fillRect(26, 22, 3, 2); p.fillRect(35, 22, 3, 2);
+    p.fillStyle = '#1A1A24';
+    p.fillRect(27, 22, 2, 2); p.fillRect(36, 22, 2, 2);
+    p.fillRect(26, 20, 3, 1); p.fillRect(35, 20, 3, 1);
+    p.fillStyle = '#A88058'; p.fillRect(31, 26, 2, 5);
+    p.fillStyle = '#906040'; p.fillRect(31, 30, 2, 1);
+    p.fillStyle = '#703020'; p.fillRect(29, 35, 6, 1);
+    p.fillStyle = 'rgba(90, 60, 40, 0.4)'; p.fillRect(24, 40, 16, 2);
+    p.fillStyle = '#A88058'; p.fillRect(20, 24, 2, 4);
+  } else {
+    // M-07 pixel face
+    p.fillStyle = '#2A2A38'; p.fillRect(6, 48, 52, 16);
+    p.fillStyle = '#14141C'; p.fillRect(6, 48, 52, 2);
+    p.fillRect(4, 50, 4, 12); p.fillRect(56, 50, 4, 12);
+    p.fillStyle = '#7CC8D8'; p.fillRect(30, 52, 4, 4);
+    p.fillStyle = '#3FA0B8'; p.fillRect(30, 54, 4, 1);
+    p.fillStyle = '#14141C'; p.fillRect(28, 42, 8, 8);
+    p.fillStyle = '#0A0A12'; p.fillRect(28, 44, 8, 1); p.fillRect(28, 46, 8, 1);
+    p.fillStyle = '#2A2A38'; p.fillRect(18, 10, 28, 32);
+    p.fillStyle = '#14141C'; p.fillRect(18, 10, 28, 3);
+    p.fillStyle = '#1E1E28'; p.fillRect(18, 13, 3, 29); p.fillRect(43, 13, 3, 29);
+    p.fillStyle = '#0A0A12'; p.fillRect(18, 22, 28, 1); p.fillRect(18, 36, 28, 1);
+    const pulse = 0.75 + 0.25 * Math.sin(Date.now() / 400);
+    p.fillStyle = `rgba(124, 200, 216, ${pulse})`;
+    p.fillRect(21, 25, 22, 4);
+    p.fillStyle = '#FFFFFF'; p.fillRect(28, 26, 8, 2);
+    p.fillStyle = `rgba(124, 200, 216, ${pulse * 0.35})`;
+    p.fillRect(19, 23, 26, 8);
+    p.fillStyle = '#0A0A12'; p.fillRect(24, 38, 16, 2);
+    p.fillStyle = '#3A3A48';
+    p.fillRect(25, 38, 1, 2); p.fillRect(28, 38, 1, 2);
+    p.fillRect(31, 38, 1, 2); p.fillRect(34, 38, 1, 2); p.fillRect(37, 38, 1, 2);
+    p.fillStyle = '#14141C'; p.fillRect(36, 6, 1, 4);
+    p.fillStyle = '#FFCE6E'; p.fillRect(35, 4, 3, 2);
+    p.fillStyle = '#14141C';
+    p.fillRect(20, 15, 2, 2); p.fillRect(42, 15, 2, 2);
+    p.fillRect(20, 39, 2, 2); p.fillRect(42, 39, 2, 2);
+  }
+}
+
+function drawDialogueLine(line, x, y, alpha, isCurrent) {
+  // Profile disc
+  drawDialogueProfile(line.who, x + 14, y - 6, alpha);
+  // Speaker label
+  const isCop = line.who === 'cop';
+  const labelCol = isCop ? '216, 138, 74' : '124, 200, 216';
+  ctx.fillStyle = `rgba(${labelCol}, ${alpha * 0.85})`;
+  ctx.font = 'bold 8.5px "IBM Plex Mono", monospace';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(isCop ? 'COP · CALEB' : 'ROBOT · M-07', x + 34, y - 8);
+  // Dialogue text
+  ctx.fillStyle = `rgba(240, 232, 216, ${alpha})`;
+  ctx.font = '12.5px "IBM Plex Serif", "KoPub Batang", serif';
+  ctx.fillText(line.text, x + 34, y + 5);
+  // Typing cursor
+  if (line.typing && isCurrent) {
+    const w = ctx.measureText(line.text).width;
+    const blink = Math.floor(state.time / 14) % 2 === 0;
+    if (blink) {
+      ctx.fillStyle = `rgba(255, 206, 110, ${alpha})`;
+      ctx.fillRect(x + 34 + w + 1, y - 6, 1.5, 11);
+    }
+  }
+}
+
+function drawDialogueProfile(who, cx, cy, alpha) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  // Circle backdrop
+  ctx.fillStyle = '#14141C';
+  ctx.beginPath();
+  ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+  ctx.fill();
+
+  if (who === 'cop') {
+    // Head
+    ctx.fillStyle = '#2A2A38';
+    ctx.beginPath();
+    ctx.arc(cx, cy + 1, 6, 0, Math.PI * 2);
+    ctx.fill();
+    // Cap (upper half darker)
+    ctx.fillStyle = '#1A1A24';
+    ctx.beginPath();
+    ctx.arc(cx, cy, 6, Math.PI, Math.PI * 2);
+    ctx.fill();
+    // Cap cream trim
+    ctx.fillStyle = '#FFCE6E';
+    ctx.fillRect(cx - 5, cy - 1, 10, 1);
+    // Ring (amber accent)
+    ctx.strokeStyle = 'rgba(216, 138, 74, 0.75)';
+    ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+    ctx.stroke();
+  } else {
+    // Robot — angular head silhouette
+    ctx.fillStyle = '#2A2A38';
+    ctx.fillRect(cx - 6, cy - 4, 12, 10);
+    // Eye slit (cyan)
+    ctx.fillStyle = '#7CC8D8';
+    ctx.fillRect(cx - 4, cy - 1, 8, 1.6);
+    // Soft glow around slit
+    ctx.fillStyle = 'rgba(124, 200, 216, 0.25)';
+    ctx.fillRect(cx - 6, cy - 2, 12, 4);
+    // Ring (cyan accent)
+    ctx.strokeStyle = 'rgba(124, 200, 216, 0.75)';
+    ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/* ---------- Interior Entry Prompt ---------- */
+function drawInteractPrompt() {
+  if (!state.caseMarker || !state.caseMarker.arrived || state.entering) return;
+  const pulse = 0.5 + 0.5 * Math.sin(state.time * 0.1);
+  const cx = CFG.VIEW_W / 2;
+  const cy = CFG.VIEW_H - 130;  // above dialogue box
+  const w = 240, h = 30;
+
+  ctx.save();
+  // Box
+  ctx.fillStyle = 'rgba(14, 14, 20, 0.92)';
+  ctx.fillRect(cx - w/2, cy - h/2, w, h);
+  // Red border (case site urgency)
+  ctx.strokeStyle = `rgba(168, 48, 42, ${0.75 + pulse * 0.25})`;
+  ctx.lineWidth = 1.3;
+  ctx.strokeRect(cx - w/2 + 0.5, cy - h/2 + 0.5, w - 1, h - 1);
+  // Text
+  ctx.fillStyle = '#F0E8D8';
+  ctx.font = '11px "IBM Plex Mono", monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('[ E ]  하차하여 현관으로', cx, cy);
+  ctx.restore();
+}
+
+/* ---------- Interior Entry Fade-Out ---------- */
+function drawEnterFade() {
+  if (state.enterFade <= 0) return;
+  const f = state.enterFade;
+  // Fade to dark ink
+  ctx.save();
+  ctx.fillStyle = `rgba(14, 14, 20, ${f})`;
+  ctx.fillRect(0, 0, CFG.VIEW_W, CFG.VIEW_H);
+  // "현관으로..." text appears as fade deepens
+  if (f > 0.5) {
+    const textAlpha = (f - 0.5) * 2;
+    ctx.fillStyle = `rgba(240, 232, 216, ${textAlpha})`;
+    ctx.font = '20px "Cormorant Garamond", "KoPub Batang", serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('현관으로…', CFG.VIEW_W / 2, CFG.VIEW_H / 2);
+  }
+  ctx.restore();
+}
+
+/* ===================== HUD / LOG ===================== */
+function updateHUD() {
+  const c = state.clock;
+  document.getElementById('clock').textContent =
+    String(c.h).padStart(2, '0') + ':' + String(c.m).padStart(2, '0');
+  document.getElementById('speedo').textContent =
+    Math.round(Math.abs(state.car.speed) * 30);
+}
+
+let logCount = 0;
+function log(msg, cls = '') {
+  const logEl = document.getElementById('log');
+  const entry = document.createElement('div');
+  entry.className = 'entry' + (cls ? ' ' + cls : '');
+  logCount++;
+  const ts = `[${String(logCount).padStart(3, '0')}]`;
+  entry.innerHTML = `<span class="timestamp">${ts}</span><span>${msg}</span>`;
+  logEl.appendChild(entry);
+  logEl.scrollTop = logEl.scrollHeight;
+  while (logEl.children.length > 30) logEl.removeChild(logEl.firstChild);
+}
+
+/* ===================== INIT / LOOP ===================== */
+log('━━ 웨스트사이드 · 12월 12일 · 07:14 ━━', 'accent');
+log('눈이 어제부터 쌓였다. 오늘 아침은 조용하다.', 'peace');
+log('순찰 중. 좌클릭으로 목적지 지정, H로 경광등.', '');
+
+function loop() {
+  update();
+  render();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>
