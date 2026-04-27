@@ -53,7 +53,7 @@ namespace LastPatrol.Systems.World
 
         void Awake()
         {
-            if (investigation == null) investigation = FindFirstObjectByType<InvestigationSystem>();
+            if (investigation == null) investigation = FindAnyObjectByType<InvestigationSystem>();
         }
 
         void OnEnable()
@@ -106,7 +106,10 @@ namespace LastPatrol.Systems.World
 
             // 진실을 알게 됐으니 표적이 된다 — 다음 사이클부터 EncounterSpawner가 적 스폰.
             if (markPlayerAsHunted) PlayerStatus.SetHunted(true);
-            PlayerStatus.NotifyCaseCompleted();
+
+            // 사건 ID 기록 — DispatchSystem이 같은 사건 반복 dispatch 방지.
+            string completedId = (ActiveCase.Current != null) ? ActiveCase.Current.caseId : null;
+            PlayerStatus.NotifyCaseCompleted(completedId);
 
             if (clearActiveCase) ActiveCase.Clear();
 

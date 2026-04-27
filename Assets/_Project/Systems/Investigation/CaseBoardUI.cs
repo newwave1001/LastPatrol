@@ -34,7 +34,7 @@ namespace LastPatrol.Systems.Investigation
 
         void Awake()
         {
-            if (input == null) input = FindFirstObjectByType<InputReader>();
+            if (input == null) input = FindAnyObjectByType<InputReader>();
         }
 
         void Start()

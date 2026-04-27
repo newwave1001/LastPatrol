@@ -39,9 +39,9 @@ namespace LastPatrol.Systems.World
 
         void Awake()
         {
-            if (input == null) input = FindFirstObjectByType<InputReader>();
-            if (maren == null) maren = FindFirstObjectByType<MarenController>();
-            if (m07   == null) m07   = FindFirstObjectByType<M07Controller>();
+            if (input == null) input = FindAnyObjectByType<InputReader>();
+            if (maren == null) maren = FindAnyObjectByType<MarenController>();
+            if (m07   == null) m07   = FindAnyObjectByType<M07Controller>();
         }
 
         void Start()

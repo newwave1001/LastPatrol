@@ -53,7 +53,7 @@ namespace LastPatrol.Systems.Dialogue
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
             if (panel != null) panel.Hide();
-            if (inputToLock == null) inputToLock = FindFirstObjectByType<InputReader>();
+            if (inputToLock == null) inputToLock = FindAnyObjectByType<InputReader>();
         }
 
         void OnDisable()

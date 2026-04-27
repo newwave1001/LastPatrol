@@ -50,6 +50,10 @@ namespace LastPatrol.Systems.Dispatch
         [Tooltip("dispatch 전엔 마커를 비활성화 (씬 시작 시 SetActive(false)).")]
         [SerializeField] private bool hideMarkerUntilDispatch = true;
 
+        [Header("Repeat Prevention")]
+        [Tooltip("PlayerStatus가 이 마커의 case를 이미 완료했다면 dispatch 트리거 안 함 (마커도 비활성 유지).")]
+        [SerializeField] private bool skipIfCaseAlreadyCompleted = true;
+
         public DispatchState State { get; private set; } = DispatchState.Standby;
 
         public event System.Action OnDispatched;
@@ -59,11 +63,11 @@ namespace LastPatrol.Systems.Dispatch
 
         void Awake()
         {
-            if (clock  == null) clock  = FindFirstObjectByType<GameClock>();
-            if (hud    == null) hud    = FindFirstObjectByType<DriveHUD>();
-            if (car    == null) car    = FindFirstObjectByType<CarController>();
-            if (marker == null) marker = FindFirstObjectByType<CaseMarker>();
-            if (input  == null) input  = FindFirstObjectByType<InputReader>();
+            if (clock  == null) clock  = FindAnyObjectByType<GameClock>();
+            if (hud    == null) hud    = FindAnyObjectByType<DriveHUD>();
+            if (car    == null) car    = FindAnyObjectByType<CarController>();
+            if (marker == null) marker = FindAnyObjectByType<CaseMarker>();
+            if (input  == null) input  = FindAnyObjectByType<InputReader>();
         }
 
         void OnEnable()
@@ -113,6 +117,17 @@ namespace LastPatrol.Systems.Dispatch
             if (clock == null || hud == null) return;
 
             int elapsed = clock.TotalSeconds - _baseSeconds;
+
+            // 이 마커의 사건이 이미 완료됐으면 dispatch 자체를 트리거하지 않음.
+            if (skipIfCaseAlreadyCompleted && State == DispatchState.Standby && marker != null && marker.CaseData != null)
+            {
+                if (PlayerStatus.HasCompleted(marker.CaseData.caseId))
+                {
+                    // 마커는 비활성 유지 — 한 번 끝난 사건은 도시에서 사라짐
+                    if (marker.gameObject.activeSelf) marker.gameObject.SetActive(false);
+                    return;
+                }
+            }
 
             // STANDBY → EN ROUTE
             if (State == DispatchState.Standby && elapsed >= dispatchAtGameSecond)

@@ -51,8 +51,8 @@ namespace LastPatrol.Systems.Encounter
 
         void Awake()
         {
-            if (target == null) target = FindFirstObjectByType<CarController>();
-            if (dispatchSystem == null) dispatchSystem = FindFirstObjectByType<DispatchSystem>();
+            if (target == null) target = FindAnyObjectByType<CarController>();
+            if (dispatchSystem == null) dispatchSystem = FindAnyObjectByType<DispatchSystem>();
         }
 
         void Update()

@@ -25,6 +25,10 @@ namespace LastPatrol.Systems.Vehicle
         [SerializeField] private float height = 18f;
         [Tooltip("타겟 진행 방향으로 카메라가 살짝 미리 보는 거리. v04 CAM_LOOKAHEAD = 50px.")]
         [SerializeField] private float lookAhead = 4.5f;
+        [Tooltip("차량 정지 시 카메라가 차량 forward 반대 방향으로 N미터. " +
+                 "음수면 차량이 화면 위쪽에 위치, 양수면 화면 아래. " +
+                 "pitch 78°일 때 약 -4 정도가 차량 화면 중앙.")]
+        [SerializeField] private float restingForwardOffset = -4f;
         [Tooltip("카메라 추종 부드러움. v04 CAM_LERP = 0.08.")]
         [SerializeField, Range(0.01f, 1f)] private float followSmoothing = 0.08f;
 
@@ -59,12 +63,19 @@ namespace LastPatrol.Systems.Vehicle
         {
             if (target == null) return;
 
-            // 진행 방향 lookahead — 차량 forward × 현재 속도 비율
+            // 진행 방향 lookahead — 차량 forward × 현재 속도 비율 + resting offset
             Vector3 lookaheadOffset = Vector3.zero;
             if (car != null)
             {
                 float speedRatio = Mathf.Clamp(car.CurrentSpeed / 18f, -1f, 1f);
-                lookaheadOffset = car.Forward * (lookAhead * speedRatio);
+                // resting offset이 차량 forward 반대 방향(음수)이면 정지 시 차량이 화면 위쪽.
+                // 가속 시 lookahead가 더 큰 양의 forward로 → 차량이 점점 화면 중앙/아래로 (진행 방향 미리 보기).
+                lookaheadOffset = car.Forward * (lookAhead * speedRatio + restingForwardOffset);
+            }
+            else
+            {
+                // car 참조 없으면 월드 +Z 기준 단순 offset (yaw=0 가정)
+                lookaheadOffset = new Vector3(0f, 0f, restingForwardOffset);
             }
 
             Vector3 desired = target.position + lookaheadOffset + Vector3.up * height;

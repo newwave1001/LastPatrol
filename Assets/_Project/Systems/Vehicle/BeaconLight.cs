@@ -44,7 +44,7 @@ namespace LastPatrol.Systems.Vehicle
 
         void Awake()
         {
-            if (input == null) input = FindFirstObjectByType<InputReader>();
+            if (input == null) input = FindAnyObjectByType<InputReader>();
             _mpb = new MaterialPropertyBlock();
             SetActive(startOn);
         }

@@ -28,8 +28,8 @@ namespace LastPatrol.Characters
         [SerializeField] private float cowerStopRadius = 1.8f;
         [Tooltip("이 거리 이상 떨어져 있으면 catch-up 속도로 이동.")]
         [SerializeField] private float cowerCatchupRadius = 6f;
-        [Tooltip("M-07 활성 시 마렌 자동 엄폐 시도 (가까운 엄폐물 자동 진입). 1차는 false.")]
-        [SerializeField] private bool autoCoverWhenCowering = false;
+        [Tooltip("M-07 근처 도달 후 가까운 엄폐물 자동 진입.")]
+        [SerializeField] private bool autoCoverWhenCowering = true;
 
         private CharacterMovement movement;
         private CoverSystem cover;
@@ -62,12 +62,28 @@ namespace LastPatrol.Characters
 
         void OnEnable()
         {
-            if (input != null) input.OnInteractPressed += HandleInteract;
+            if (input != null)
+            {
+                input.OnInteractPressed += HandleInteract;
+                input.OnJumpPressed += HandleJump;
+            }
         }
 
         void OnDisable()
         {
-            if (input != null) input.OnInteractPressed -= HandleInteract;
+            if (input != null)
+            {
+                input.OnInteractPressed -= HandleInteract;
+                input.OnJumpPressed -= HandleJump;
+            }
+        }
+
+        private void HandleJump()
+        {
+            if (!IsAlive) return;
+            if (CurrentMode != ControlMode.Manual) return; // Cower 중엔 점프 X
+            if (cover != null && cover.IsInCover) return;  // 엄폐 중 점프 X
+            movement.TryJump();
         }
 
         void Update()
@@ -86,10 +102,23 @@ namespace LastPatrol.Characters
             else // Cower
             {
                 Vector2 autoMove = ComputeCowerAxis();
-                movement.Tick(autoMove);
+                bool reachedRobot = autoMove.sqrMagnitude < 1e-4f;
+
+                // M-07 근처 도달 후에만 엄폐 시도 — 이동 중엔 엄폐 진입 막아서 멈추는 현상 방지.
+                if (reachedRobot && autoCoverWhenCowering)
+                {
+                    movement.Tick(Vector2.zero);
+                    cover.Tick(true);
+                }
+                else
+                {
+                    // 이동 중이거나 자동 엄폐 비활성 → 단순 이동, 엄폐 해제 유지
+                    movement.Tick(autoMove);
+                    cover.Tick(false);
+                }
+
                 // Cower 동안엔 InputReader Charge/Interact 무시 (M-07이 활성).
                 IsCharging = false;
-                cover.Tick(autoCoverWhenCowering); // 자동 엄폐 옵션
             }
         }
 
@@ -124,6 +153,7 @@ namespace LastPatrol.Characters
         private void HandleInteract()
         {
             if (!IsAlive) return;
+            if (CurrentMode != ControlMode.Manual) return; // Cower 모드(M-07 활성) 시 F 무시
             interaction.TryInteract();
         }
 

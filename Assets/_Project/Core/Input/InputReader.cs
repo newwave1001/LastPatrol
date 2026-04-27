@@ -24,6 +24,7 @@ namespace LastPatrol.Core.Input
         public event Action OnSwitchPressed;
         public event Action OnPausePressed;
         public event Action OnBoardPressed;
+        public event Action OnJumpPressed;
 
         // --- Drive map ---
         public Vector2 DriveAxis { get; private set; }   // x = steer, y = throttle/reverse
@@ -63,6 +64,7 @@ namespace LastPatrol.Core.Input
             inputs.Player.Switch.performed   += _ => OnSwitchPressed?.Invoke();
             inputs.Player.Pause.performed    += _ => OnPausePressed?.Invoke();
             inputs.Player.Board.performed    += _ => OnBoardPressed?.Invoke();
+            inputs.Player.Jump.performed     += _ => OnJumpPressed?.Invoke();
 
             // -- Drive --
             inputs.Drive.Move.performed += ctx => DriveAxis = ctx.ReadValue<Vector2>();

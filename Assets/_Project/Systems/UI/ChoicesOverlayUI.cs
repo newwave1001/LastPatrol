@@ -29,7 +29,7 @@ namespace LastPatrol.Systems.UI
         void Awake()
         {
             HideImmediate();
-            if (inputToLock == null) inputToLock = FindFirstObjectByType<InputReader>();
+            if (inputToLock == null) inputToLock = FindAnyObjectByType<InputReader>();
         }
 
         void OnEnable()

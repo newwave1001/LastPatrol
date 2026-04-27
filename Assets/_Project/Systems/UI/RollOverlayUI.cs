@@ -36,7 +36,7 @@ namespace LastPatrol.Systems.UI
         void Awake()
         {
             if (canvasGroup != null) canvasGroup.alpha = 0f;
-            if (inputToLock == null) inputToLock = FindFirstObjectByType<InputReader>();
+            if (inputToLock == null) inputToLock = FindAnyObjectByType<InputReader>();
         }
 
         void OnEnable()  { if (flow != null) flow.OnRollShown += Show; }

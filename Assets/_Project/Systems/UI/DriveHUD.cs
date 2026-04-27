@@ -1,4 +1,6 @@
 using UnityEngine;
+using UnityEngine.UI;
+using TMPro;
 using LastPatrol.Core;
 using LastPatrol.Systems.Vehicle;
 using LastPatrol.Systems.World;
@@ -6,16 +8,12 @@ using LastPatrol.Systems.World;
 namespace LastPatrol.Systems.UI
 {
     /// <summary>
-    /// 외부 운전 씬 우상단 HUD. v04 mockup의 #speedo / #clock / #dispatch-status 이식.
-    /// 그레이박스 단계라 OnGUI로 빠르게. 폴리싱 시 TMP Canvas로 교체.
+    /// 외부 운전 씬 우상단 HUD — TMP Canvas 버전 (이전 OnGUI 대체).
+    /// 자동 빌드: 인스펙터 슬롯 비어있으면 Awake에서 Canvas + 자식 위젯 자동 생성.
+    /// 폰트만 인스펙터에서 본고딕 SDF 같은 한국어 폰트 드래그하면 끝.
     ///
-    /// 색상 팔레트 (CLAUDE.md):
-    ///   페이퍼 #F5EEE0 (배경) / 잉크 #3A2E28 (텍스트) / 시안 #7CC8D8 (M-07/dispatch)
-    ///   앰버 #D88A4A (마렌/경고) / 블러드 #A8302A (위험)
-    ///
-    /// 외부 호출:
-    ///   SetDispatch("CASE 12 NORDMAN", DispatchTone.Cyan);
-    ///   SetDispatch("ON SCENE", DispatchTone.Blood);
+    /// 외부 API (이전과 동일):
+    ///   SetDispatch(text, tone) / SetPrompt(text, tone) / ClearPrompt()
     /// </summary>
     [DisallowMultipleComponent]
     public class DriveHUD : MonoBehaviour
@@ -27,38 +25,38 @@ namespace LastPatrol.Systems.UI
         [SerializeField] private GameClock clock;
         [SerializeField] private VehicleHealth carHealth;
 
-        [Header("Display")]
-        [SerializeField] private bool showHUD = true;
-        [Tooltip("우상단으로부터 여백 (px)")]
-        [SerializeField] private Vector2 margin = new Vector2(12f, 12f);
-        [Tooltip("HUD 박스 폭/높이 (px). HP 게이지 포함하려면 높이 154 권장.")]
-        [SerializeField] private Vector2 boxSize = new Vector2(280f, 154f);
+        [Header("UI Slots (비워두면 Awake에서 자동 생성)")]
+        [SerializeField] private Canvas canvas;
+        [SerializeField] private RectTransform panel;
+        [SerializeField] private TMP_Text speedText;
+        [SerializeField] private TMP_Text kmhLabel;
+        [SerializeField] private TMP_Text clockText;
+        [SerializeField] private TMP_Text dispatchText;
+        [SerializeField] private TMP_Text promptText;
+        [SerializeField] private TMP_Text hpLabel;
+        [SerializeField] private Image hpBack;
+        [SerializeField] private Image hpFill;
+        [SerializeField] private TMP_Text huntedLabel;
+        [SerializeField] private Image huntedDot;
 
-        [Header("HP Gauge")]
-        [SerializeField] private bool showHealthBar = true;
-        [Tooltip("HP 게이지 색상. 페이퍼/잉크 톤에 어울리는 블러드(#A8302A) 권장.")]
-        [SerializeField] private Color healthFillColor = new Color(0.659f, 0.188f, 0.165f);
-        [SerializeField] private Color healthBackColor = new Color(0.227f, 0.180f, 0.157f, 0.18f);
+        [Header("Auto Build")]
+        [SerializeField] private bool autoBuildIfMissing = true;
+        [Tooltip("한국어 폰트 SDF (예: 본고딕 Bold). null이면 TMP default 폰트 사용.")]
+        [SerializeField] private TMP_FontAsset preferredFont;
+        [SerializeField] private Vector2 panelSize = new Vector2(300f, 156f);
+        [SerializeField] private Vector2 panelMargin = new Vector2(12f, 12f);
 
-        // 톤 매핑 (CLAUDE.md 팔레트)
-        static readonly Color Paper  = new Color(0.961f, 0.933f, 0.878f, 0.95f);
-        static readonly Color Ink    = new Color(0.227f, 0.180f, 0.157f);
-        static readonly Color Cyan   = new Color(0.486f, 0.784f, 0.847f);
-        static readonly Color Amber  = new Color(0.847f, 0.541f, 0.290f);
-        static readonly Color Blood  = new Color(0.659f, 0.188f, 0.165f);
+        // CLAUDE.md 팔레트
+        static readonly Color Paper = new Color(0.961f, 0.933f, 0.878f, 0.95f);
+        static readonly Color Ink   = new Color(0.227f, 0.180f, 0.157f);
+        static readonly Color Cyan  = new Color(0.486f, 0.784f, 0.847f);
+        static readonly Color Amber = new Color(0.847f, 0.541f, 0.290f);
+        static readonly Color Blood = new Color(0.659f, 0.188f, 0.165f);
 
-        // dispatch 상태 (외부에서 SetDispatch로 변경)
         private string _dispatch = "STANDBY";
         private DispatchTone _dispatchTone = DispatchTone.Ink;
-
-        // prompt — 별도 라인 ([F] ENTER 같은 입력 안내)
-        private string _prompt = string.Empty;
+        private string _prompt = "";
         private DispatchTone _promptTone = DispatchTone.Amber;
-
-        // 스타일 캐시
-        private GUIStyle _bigStyle, _smallStyle, _accentStyle, _promptStyle;
-        private bool _stylesReady;
-        private Texture2D _whitePixel;
 
         public void SetDispatch(string text, DispatchTone tone = DispatchTone.Ink)
         {
@@ -68,44 +66,64 @@ namespace LastPatrol.Systems.UI
 
         public void SetPrompt(string text, DispatchTone tone = DispatchTone.Amber)
         {
-            _prompt = text ?? string.Empty;
+            _prompt = text ?? "";
             _promptTone = tone;
         }
 
-        public void ClearPrompt() => _prompt = string.Empty;
+        public void ClearPrompt() => _prompt = "";
 
         void Awake()
         {
-            if (car == null) car = FindFirstObjectByType<CarController>();
-            if (clock == null) clock = FindFirstObjectByType<GameClock>();
+            if (car == null) car = FindAnyObjectByType<CarController>();
+            if (clock == null) clock = FindAnyObjectByType<GameClock>();
             if (carHealth == null && car != null) carHealth = car.GetComponent<VehicleHealth>();
-            if (carHealth == null) carHealth = FindFirstObjectByType<VehicleHealth>();
+            if (carHealth == null) carHealth = FindAnyObjectByType<VehicleHealth>();
+
+            if (autoBuildIfMissing && canvas == null) AutoBuild();
         }
 
-        void OnDestroy()
+        void Update()
         {
-            if (_whitePixel != null) Destroy(_whitePixel);
+            // 속도
+            if (speedText != null && car != null)
+            {
+                int kmh = Mathf.RoundToInt(Mathf.Abs(car.CurrentSpeed) * 3.6f);
+                speedText.text = kmh.ToString();
+            }
+            // 시계
+            if (clockText != null && clock != null)
+                clockText.text = clock.Display;
+
+            // dispatch
+            if (dispatchText != null)
+            {
+                dispatchText.text = _dispatch;
+                dispatchText.color = ToneToColor(_dispatchTone);
+            }
+            // prompt — 비어있으면 숨김
+            if (promptText != null)
+            {
+                bool show = !string.IsNullOrEmpty(_prompt);
+                promptText.gameObject.SetActive(show);
+                if (show)
+                {
+                    promptText.text = _prompt;
+                    promptText.color = ToneToColor(_promptTone);
+                }
+            }
+            // HP 바
+            if (hpFill != null && carHealth != null)
+                hpFill.fillAmount = carHealth.Normalized;
+            if (hpLabel != null && carHealth != null)
+                hpLabel.text = $"HP {Mathf.RoundToInt(carHealth.CurrentHealth)}/{Mathf.RoundToInt(carHealth.MaxHealth)}";
+
+            // HUNTED 인디케이터
+            bool hunted = PlayerStatus.IsHunted;
+            if (huntedLabel != null) huntedLabel.gameObject.SetActive(hunted);
+            if (huntedDot != null)   huntedDot.gameObject.SetActive(hunted);
         }
 
-        void EnsureStyles()
-        {
-            if (_stylesReady) return;
-            _bigStyle    = new GUIStyle(GUI.skin.label) { fontSize = 36, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
-            _smallStyle  = new GUIStyle(GUI.skin.label) { fontSize = 13, alignment = TextAnchor.MiddleCenter };
-            _accentStyle = new GUIStyle(GUI.skin.label) { fontSize = 12, alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold, wordWrap = false };
-            _promptStyle = new GUIStyle(GUI.skin.label) { fontSize = 11, alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold };
-            _bigStyle.normal.textColor   = Ink;
-            _smallStyle.normal.textColor = Ink;
-
-            // 1×1 white texture (배경 박스용)
-            _whitePixel = new Texture2D(1, 1, TextureFormat.RGBA32, false);
-            _whitePixel.SetPixel(0, 0, Color.white);
-            _whitePixel.Apply();
-
-            _stylesReady = true;
-        }
-
-        Color ToneToColor(DispatchTone t)
+        private Color ToneToColor(DispatchTone t)
         {
             switch (t)
             {
@@ -116,82 +134,134 @@ namespace LastPatrol.Systems.UI
             }
         }
 
-        void OnGUI()
+        // -------- Auto-build --------
+
+        private void AutoBuild()
         {
-            if (!showHUD) return;
-            EnsureStyles();
+            // Canvas
+            var canvasGo = new GameObject("DriveHUD_Canvas");
+            canvasGo.transform.SetParent(transform, false);
+            canvas = canvasGo.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = 100;
+            var scaler = canvasGo.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920f, 1080f);
+            scaler.matchWidthOrHeight = 1f;
+            canvasGo.AddComponent<GraphicRaycaster>();
 
-            float w = boxSize.x, h = boxSize.y;
-            float x = Screen.width - w - margin.x;
-            float y = margin.y;
+            // Panel (페이퍼 박스, 우상단)
+            var panelGo = new GameObject("Panel");
+            panelGo.transform.SetParent(canvasGo.transform, false);
+            var panelImg = panelGo.AddComponent<Image>();
+            panelImg.color = Paper;
+            panel = panelGo.GetComponent<RectTransform>();
+            panel.anchorMin = panel.anchorMax = new Vector2(1f, 1f);
+            panel.pivot = new Vector2(1f, 1f);
+            panel.anchoredPosition = new Vector2(-panelMargin.x, -panelMargin.y);
+            panel.sizeDelta = panelSize;
 
-            // 페이퍼 배경 박스
-            Color prev = GUI.color;
-            GUI.color = Paper;
-            GUI.DrawTexture(new Rect(x, y, w, h), _whitePixel);
-            // 잉크 테두리 (얇게 4면)
-            GUI.color = Ink;
-            GUI.DrawTexture(new Rect(x,         y,         w, 1),  _whitePixel);
-            GUI.DrawTexture(new Rect(x,         y + h - 1, w, 1),  _whitePixel);
-            GUI.DrawTexture(new Rect(x,         y,         1, h),  _whitePixel);
-            GUI.DrawTexture(new Rect(x + w - 1, y,         1, h),  _whitePixel);
-            GUI.color = prev;
+            // Speed (큰 숫자)
+            speedText = MakeText("Speed", panel, new Vector2(0f, -6f), new Vector2(panelSize.x, 52f),
+                                 44, Ink, FontStyles.Bold, TextAlignmentOptions.Center, "0");
+            // KM/H
+            kmhLabel  = MakeText("KMHLabel", panel, new Vector2(0f, -56f), new Vector2(panelSize.x, 16f),
+                                 12, Ink, FontStyles.Normal, TextAlignmentOptions.Center, "KM/H");
+            // Clock
+            clockText = MakeText("Clock", panel, new Vector2(0f, -78f), new Vector2(panelSize.x, 16f),
+                                 13, Ink, FontStyles.Normal, TextAlignmentOptions.Center, "07:14:00");
+            // Dispatch
+            dispatchText = MakeText("Dispatch", panel, new Vector2(0f, -98f), new Vector2(panelSize.x - 12f, 18f),
+                                    13, Ink, FontStyles.Bold, TextAlignmentOptions.Center, "STANDBY");
+            // Prompt (작게, 아래)
+            promptText = MakeText("Prompt", panel, new Vector2(0f, -118f), new Vector2(panelSize.x - 12f, 14f),
+                                  11, Amber, FontStyles.Bold, TextAlignmentOptions.Center, "");
+            promptText.gameObject.SetActive(false);
 
-            // 속도계 (km/h). v04는 speed * 30, 여기선 m/s × 3.6 = km/h.
-            int kmh = car != null ? Mathf.RoundToInt(Mathf.Abs(car.CurrentSpeed) * 3.6f) : 0;
-            GUI.Label(new Rect(x, y + 4,  w, 44), kmh.ToString(), _bigStyle);
-            GUI.Label(new Rect(x, y + 48, w, 14), "KM/H",        _smallStyle);
+            // HP 바 배경 + 채움
+            hpBack = MakeImage("HPBack", panel,
+                anchoredPos: new Vector2(0f, -140f),
+                size: new Vector2(panelSize.x - 32f, 6f),
+                color: new Color(Ink.r, Ink.g, Ink.b, 0.18f),
+                anchorY: 1f, pivotY: 1f, centerX: true);
 
-            // 시계 (HH:MM:SS)
-            string timeText = clock != null ? clock.Display : "07:14:00";
-            GUI.Label(new Rect(x, y + 66, w, 14), timeText, _smallStyle);
+            hpFill = MakeImage("HPFill", hpBack.rectTransform,
+                stretchToParent: true,
+                color: Blood);
+            hpFill.type = Image.Type.Filled;
+            hpFill.fillMethod = Image.FillMethod.Horizontal;
+            hpFill.fillOrigin = (int)Image.OriginHorizontal.Left;
+            hpFill.fillAmount = 1f;
 
-            // dispatch 상태 (메인 텍스트)
-            _accentStyle.normal.textColor = ToneToColor(_dispatchTone);
-            GUI.Label(new Rect(x + 4, y + 86, w - 8, 16), _dispatch, _accentStyle);
+            // HP 라벨 (HP 100/100)
+            hpLabel = MakeText("HPLabel", panel, new Vector2(0f, -126f), new Vector2(panelSize.x - 12f, 12f),
+                               10, Ink, FontStyles.Normal, TextAlignmentOptions.Center, "HP 100/100");
 
-            // prompt (입력 안내, 별도 라인)
-            if (!string.IsNullOrEmpty(_prompt))
+            // HUNTED 인디케이터 (우측 상단 코너)
+            huntedDot = MakeImage("HuntedDot", panel,
+                anchoredPos: new Vector2(-12f, -12f),
+                size: new Vector2(10f, 10f),
+                color: Blood,
+                anchorX: 1f, pivotX: 1f, anchorY: 1f, pivotY: 1f);
+            huntedDot.gameObject.SetActive(false);
+
+            huntedLabel = MakeText("HuntedLabel", panel, new Vector2(-26f, -10f), new Vector2(70f, 14f),
+                                   11, Blood, FontStyles.Bold, TextAlignmentOptions.Right, "HUNTED");
+            var hlRT = huntedLabel.rectTransform;
+            hlRT.anchorMin = hlRT.anchorMax = new Vector2(1f, 1f);
+            hlRT.pivot = new Vector2(1f, 1f);
+            hlRT.anchoredPosition = new Vector2(-26f, -10f);
+            huntedLabel.gameObject.SetActive(false);
+        }
+
+        private TMP_Text MakeText(string name, Transform parent, Vector2 anchoredPos, Vector2 size,
+                                  int fontSize, Color color, FontStyles style, TextAlignmentOptions align, string defaultText)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            var rt = go.AddComponent<RectTransform>();
+            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 1f);
+            rt.pivot = new Vector2(0.5f, 1f);
+            rt.anchoredPosition = anchoredPos;
+            rt.sizeDelta = size;
+            var t = go.AddComponent<TextMeshProUGUI>();
+            t.text = defaultText;
+            t.fontSize = fontSize;
+            t.color = color;
+            t.alignment = align;
+            t.fontStyle = style;
+            t.raycastTarget = false;
+            if (preferredFont != null) t.font = preferredFont;
+            return t;
+        }
+
+        private Image MakeImage(string name, Transform parent, Vector2 anchoredPos = default, Vector2 size = default,
+                                Color color = default, bool stretchToParent = false,
+                                float anchorX = 0.5f, float pivotX = 0.5f,
+                                float anchorY = 1f, float pivotY = 1f,
+                                bool centerX = false)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            var img = go.AddComponent<Image>();
+            img.color = color == default ? Color.white : color;
+            img.raycastTarget = false;
+            var rt = go.GetComponent<RectTransform>();
+            if (stretchToParent)
             {
-                _promptStyle.normal.textColor = ToneToColor(_promptTone);
-                GUI.Label(new Rect(x + 4, y + 108, w - 8, 14), _prompt, _promptStyle);
+                rt.anchorMin = Vector2.zero;
+                rt.anchorMax = Vector2.one;
+                rt.offsetMin = rt.offsetMax = Vector2.zero;
             }
-
-            // HUNTED 인디케이터 (오른쪽 위 코너에 작은 빨간 점 + 라벨)
-            if (PlayerStatus.IsHunted)
+            else
             {
-                float dotR = 6f;
-                float dotX = x + w - 12f - dotR * 2f;
-                float dotY = y + 12f;
-                GUI.color = Blood;
-                GUI.DrawTexture(new Rect(dotX, dotY, dotR * 2f, dotR * 2f), _whitePixel);
-                GUI.color = prev;
-                _accentStyle.normal.textColor = Blood;
-                GUI.Label(new Rect(x + w - 80f, dotY - 1f, 60f, 14f), "HUNTED", _accentStyle);
+                if (centerX) { anchorX = 0.5f; pivotX = 0.5f; }
+                rt.anchorMin = rt.anchorMax = new Vector2(anchorX, anchorY);
+                rt.pivot = new Vector2(pivotX, pivotY);
+                rt.anchoredPosition = anchoredPos;
+                rt.sizeDelta = size;
             }
-
-            // HP 게이지 (가장 아래)
-            if (showHealthBar && carHealth != null)
-            {
-                float gaugeY = y + h - 16f;
-                float gaugeH = 6f;
-                float gaugeX = x + 16f;
-                float gaugeW = w - 32f;
-                // 배경
-                GUI.color = healthBackColor;
-                GUI.DrawTexture(new Rect(gaugeX, gaugeY, gaugeW, gaugeH), _whitePixel);
-                // 채움
-                float fillW = gaugeW * Mathf.Clamp01(carHealth.Normalized);
-                GUI.color = healthFillColor;
-                GUI.DrawTexture(new Rect(gaugeX, gaugeY, fillW, gaugeH), _whitePixel);
-                GUI.color = prev;
-                // 수치
-                int hp = Mathf.RoundToInt(carHealth.CurrentHealth);
-                int maxHp = Mathf.RoundToInt(carHealth.MaxHealth);
-                _smallStyle.fontSize = 11;
-                GUI.Label(new Rect(x, gaugeY - 14f, w, 12), $"HP {hp}/{maxHp}", _smallStyle);
-                _smallStyle.fontSize = 13;
-            }
+            return img;
         }
     }
 }

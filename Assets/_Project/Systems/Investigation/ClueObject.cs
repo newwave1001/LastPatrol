@@ -5,7 +5,8 @@ using LastPatrol.Data;
 namespace LastPatrol.Systems.Investigation
 {
     // 씬에 배치된 단서 GameObject. ClueDataSO 참조.
-    // autoDiscover=true면 트리거 진입 시 자동 발견. false면 F 키 조사.
+    // 항상 F 조사 모드 — 마렌이 다가가면 [F] 조사 prompt 뜨고 F 눌러야 발견.
+    // (이전 autoDiscover 자동 발견 모드는 제거. SO의 autoDiscover 플래그는 무시.)
     [RequireComponent(typeof(Collider))]
     public class ClueObject : MonoBehaviour, IInteractable
     {
@@ -18,13 +19,12 @@ namespace LastPatrol.Systems.Investigation
         void Reset()
         {
             var col = GetComponent<Collider>();
-            if (col != null && data != null && data.autoDiscover) col.isTrigger = true;
+            if (col != null) col.isTrigger = true;
         }
 
         public bool CanInteract(GameObject actor)
         {
             if (data == null) return false;
-            if (data.autoDiscover) return false; // 자동 발견은 F 조사 X
             return InvestigationSystem.Instance == null
                 || InvestigationSystem.Instance.CanDiscover(data, IsRoomCleared());
         }
@@ -32,14 +32,6 @@ namespace LastPatrol.Systems.Investigation
         public void Interact(GameObject actor)
         {
             if (data == null) return;
-            if (InvestigationSystem.Instance == null) return;
-            InvestigationSystem.Instance.Discover(data, IsRoomCleared());
-        }
-
-        void OnTriggerEnter(Collider other)
-        {
-            if (data == null || !data.autoDiscover) return;
-            if (other.GetComponentInParent<Characters.MarenController>() == null) return;
             if (InvestigationSystem.Instance == null) return;
             InvestigationSystem.Instance.Discover(data, IsRoomCleared());
         }
@@ -56,9 +48,7 @@ namespace LastPatrol.Systems.Investigation
 
         void OnDrawGizmos()
         {
-            Gizmos.color = data != null && data.autoDiscover
-                ? new Color(0.85f, 0.54f, 0.29f, 0.5f)  // 앰버 — 자동
-                : new Color(0.49f, 0.78f, 0.85f, 0.5f); // 시안 — F 조사
+            Gizmos.color = new Color(0.49f, 0.78f, 0.85f, 0.5f); // 시안 — F 조사
             Gizmos.DrawWireSphere(transform.position, 0.4f);
         }
     }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace LastPatrol.Systems.World
 {
@@ -17,7 +18,16 @@ namespace LastPatrol.Systems.World
         public static bool IsHunted { get; private set; }
         public static int CompletedCases { get; private set; }
 
+        private static readonly HashSet<string> _completedCaseIds = new HashSet<string>();
+        public static IReadOnlyCollection<string> CompletedCaseIds => _completedCaseIds;
+
         public static event Action OnHuntedChanged;
+        public static event Action<string> OnCaseCompleted;
+
+        public static bool HasCompleted(string caseId)
+        {
+            return !string.IsNullOrEmpty(caseId) && _completedCaseIds.Contains(caseId);
+        }
 
         public static void SetHunted(bool value)
         {
@@ -26,15 +36,22 @@ namespace LastPatrol.Systems.World
             OnHuntedChanged?.Invoke();
         }
 
-        public static void NotifyCaseCompleted()
+        /// <summary>caseId 없이 호출 시 카운터만 증가. caseId 있으면 set에도 등록 + 이벤트.</summary>
+        public static void NotifyCaseCompleted(string caseId = null)
         {
             CompletedCases++;
+            if (!string.IsNullOrEmpty(caseId))
+            {
+                _completedCaseIds.Add(caseId);
+                OnCaseCompleted?.Invoke(caseId);
+            }
         }
 
         public static void Reset()
         {
             IsHunted = false;
             CompletedCases = 0;
+            _completedCaseIds.Clear();
         }
 
 #if UNITY_EDITOR
@@ -43,7 +60,9 @@ namespace LastPatrol.Systems.World
         {
             IsHunted = false;
             CompletedCases = 0;
+            _completedCaseIds.Clear();
             OnHuntedChanged = null;
+            OnCaseCompleted = null;
         }
 #endif
     }

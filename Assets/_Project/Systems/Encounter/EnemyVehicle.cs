@@ -76,7 +76,7 @@ namespace LastPatrol.Systems.Encounter
 
             if (target == null)
             {
-                var maren = FindFirstObjectByType<CarController>();
+                var maren = FindAnyObjectByType<CarController>();
                 if (maren != null) target = maren.transform;
             }
 

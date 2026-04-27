@@ -51,7 +51,7 @@ namespace LastPatrol.Characters.M07
             follow = GetComponent<FollowBehavior>();
             currentBattery = maxBattery;
             currentHP = maxHP;
-            if (input == null) input = FindFirstObjectByType<InputReader>();
+            if (input == null) input = FindAnyObjectByType<InputReader>();
         }
 
         void Update()

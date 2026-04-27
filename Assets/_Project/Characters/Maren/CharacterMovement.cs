@@ -15,6 +15,10 @@ namespace LastPatrol.Characters
         [SerializeField] private float gravity = -20f;
         [SerializeField] private float maxFallSpeed = -30f;
 
+        [Header("Jump")]
+        [SerializeField] private bool canJump = true;
+        [SerializeField] private float jumpHeight = 1.6f;
+
         [Header("Facing")]
         [SerializeField] private bool flipSpriteOnTurn = true;
 
@@ -63,6 +67,16 @@ namespace LastPatrol.Characters
             transform.position = worldPosition;
             controller.enabled = true;
             verticalVelocity = 0f;
+        }
+
+        /// <summary>지면 위에서만 작동. 성공하면 true.</summary>
+        public bool TryJump()
+        {
+            if (!canJump) return false;
+            if (controller == null || !controller.isGrounded) return false;
+            // v = sqrt(2 * g * h) — 운동학.
+            verticalVelocity = Mathf.Sqrt(2f * Mathf.Abs(gravity) * Mathf.Max(0.01f, jumpHeight));
+            return true;
         }
     }
 }
