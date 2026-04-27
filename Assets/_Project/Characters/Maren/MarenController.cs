@@ -58,6 +58,10 @@ namespace LastPatrol.Characters
             cover       = GetComponent<CoverSystem>();
             interaction = GetComponent<InteractionSystem>();
             currentHP   = maxHP;
+
+            // 외부 씬에서 prefab 인스턴스로 들어왔을 때 참조가 비어있을 수 있음 → 자동 검색.
+            if (input == null) input = FindAnyObjectByType<InputReader>();
+            if (robot == null) robot = FindAnyObjectByType<M07.M07Controller>();
         }
 
         void OnEnable()
@@ -152,9 +156,19 @@ namespace LastPatrol.Characters
 
         private void HandleInteract()
         {
+            string targetName = interaction != null && interaction.CurrentTarget != null
+                ? interaction.CurrentTarget.PromptLabel : "(none)";
+            Debug.Log($"[Maren] HandleInteract called — alive={IsAlive}, mode={CurrentMode}, target={targetName}", this);
+
             if (!IsAlive) return;
-            if (CurrentMode != ControlMode.Manual) return; // Cower 모드(M-07 활성) 시 F 무시
-            interaction.TryInteract();
+            if (CurrentMode != ControlMode.Manual) return;
+            if (interaction == null)
+            {
+                Debug.LogError("[Maren] interaction null — InteractionSystem 누락", this);
+                return;
+            }
+            bool ok = interaction.TryInteract();
+            Debug.Log($"[Maren] TryInteract result={ok}", this);
         }
 
         public void TakeDamage(float amount, DamageSource source)

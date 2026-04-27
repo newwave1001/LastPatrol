@@ -1,5 +1,6 @@
 using UnityEngine;
 using LastPatrol.Core.Input;
+using LastPatrol.Data;
 using LastPatrol.Systems.Vehicle;
 using LastPatrol.Systems.UI;
 using LastPatrol.Systems.World;
@@ -25,6 +26,8 @@ namespace LastPatrol.Systems.Dispatch
         [SerializeField] private CarController car;
         [SerializeField] private CaseMarker marker;
         [SerializeField] private InputReader input;
+        [Tooltip("도보 모드 시 거리 체크에 마렌 위치를 사용. 비워두면 자동 검색.")]
+        [SerializeField] private VehicleDismount dismount;
 
         [Header("Scene Transition (ON SCENE → F → next scene)")]
         [Tooltip("ON SCENE 도착 후 InputReader.Drive.Exit (F) 입력 시 로드할 씬 이름. " +
@@ -68,6 +71,16 @@ namespace LastPatrol.Systems.Dispatch
             if (car    == null) car    = FindAnyObjectByType<CarController>();
             if (marker == null) marker = FindAnyObjectByType<CaseMarker>();
             if (input  == null) input  = FindAnyObjectByType<InputReader>();
+            if (dismount == null) dismount = FindAnyObjectByType<VehicleDismount>();
+        }
+
+        /// <summary>현재 활성 캐릭터(또는 차량) 위치. 거리 체크에 사용.</summary>
+        public Vector3 GetActivePosition()
+        {
+            if (dismount != null && dismount.IsDismounted && dismount.MarenTransform != null)
+                return dismount.MarenTransform.position;
+            if (car != null) return car.transform.position;
+            return transform.position;
         }
 
         void OnEnable()
@@ -83,6 +96,12 @@ namespace LastPatrol.Systems.Dispatch
         private void HandleExitPressed()
         {
             if (State != DispatchState.OnScene) return;
+            EnterSceneNow();
+        }
+
+        /// <summary>외부에서 호출 가능 — CaseMarker.Interact 등에서. ON SCENE 상태 무관, 즉시 씬 전환.</summary>
+        public void EnterSceneNow()
+        {
             if (string.IsNullOrEmpty(nextSceneOnArrival)) return;
             if (SceneTransitionService.Instance == null)
             {
@@ -142,10 +161,10 @@ namespace LastPatrol.Systems.Dispatch
             }
 
             // 거리 체크는 EN ROUTE 이상에서만
-            if (State < DispatchState.EnRoute || marker == null || car == null) return;
+            if (State < DispatchState.EnRoute || marker == null) return;
             if (State == DispatchState.OnScene) return;
 
-            float d = Vector3.Distance(car.transform.position, marker.Position);
+            float d = Vector3.Distance(GetActivePosition(), marker.Position);
 
             if (d < arrivedDistance)
             {

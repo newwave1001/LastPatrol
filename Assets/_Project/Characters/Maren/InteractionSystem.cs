@@ -31,7 +31,9 @@ namespace LastPatrol.Characters
             float bestDist = float.MaxValue;
             foreach (var h in hits)
             {
-                if (!h.TryGetComponent<IInteractable>(out var i)) continue;
+                // 자식 collider도 root까지 검색 — IInteractable이 부모 GameObject에 있을 수 있음
+                var i = h.GetComponentInParent<IInteractable>();
+                if (i == null) continue;
                 if (!i.CanInteract(gameObject)) continue;
                 float d = (h.transform.position - transform.position).sqrMagnitude;
                 if (d < bestDist) { bestDist = d; best = i; }

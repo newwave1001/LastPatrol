@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using LastPatrol.Core.Input;
 using LastPatrol.Systems.World;
@@ -64,6 +65,11 @@ namespace LastPatrol.Systems.Vehicle
         [SerializeField] private float skin = 0.05f;
         [SerializeField] private float collisionSpeedDamp = 0.3f; // v04 *0.3
 
+        [Header("Penetration Resolve (LateUpdate)")]
+        [Tooltip("차vs차 등 깊은 침투 자동 분리. ComputePenetration 사용.")]
+        [SerializeField] private bool resolvePenetration = true;
+        [SerializeField] private LayerMask penetrationMask = ~0;
+
         [Header("Debug")]
         [Tooltip("화면 좌상단에 실시간 진단 HUD 표시")]
         [SerializeField] private bool showDebugHUD = true;
@@ -85,12 +91,99 @@ namespace LastPatrol.Systems.Vehicle
         void Awake()
         {
             // 자기 자신 + 자식의 모든 collider를 캐시 → BoxCast 시 무시.
-            // 자식 Body cube의 Box Collider를 사용자가 안 지워도 안전하게 동작.
             _ownColliders = GetComponentsInChildren<Collider>(includeInactive: true);
+
+            // 침투 분리용 collider — solid(=non-trigger) 중 첫 번째.
+            for (int i = 0; i < _ownColliders.Length; i++)
+            {
+                if (_ownColliders[i] != null && !_ownColliders[i].isTrigger)
+                {
+                    _myColliderForPenetration = _ownColliders[i];
+                    break;
+                }
+            }
+
+            if (_myColliderForPenetration == null)
+            {
+                Debug.LogWarning($"[CarController] '{name}': Solid Collider(isTrigger=false) 없음. " +
+                                 "M-07/마렌 캐릭터가 차를 통과합니다. " +
+                                 "Inspector에서 root 또는 자식 GameObject에 Box Collider 추가하고 Is Trigger 체크 해제하세요.", this);
+            }
+        }
+
+        void LateUpdate()
+        {
+            if (!resolvePenetration || _myColliderForPenetration == null) return;
+
+            int count = Physics.OverlapBoxNonAlloc(
+                transform.position,
+                boxHalfExtents,
+                _penetBuf,
+                transform.rotation,
+                penetrationMask,
+                QueryTriggerInteraction.Ignore);
+
+            for (int i = 0; i < count; i++)
+            {
+                var other = _penetBuf[i];
+                if (other == null || other.isTrigger) continue;
+                if (IsOwnCollider(other)) continue;
+
+                if (Physics.ComputePenetration(
+                    _myColliderForPenetration,
+                    _myColliderForPenetration.transform.position,
+                    _myColliderForPenetration.transform.rotation,
+                    other,
+                    other.transform.position,
+                    other.transform.rotation,
+                    out Vector3 dir, out float dist))
+                {
+                    if (dist > 0.001f)
+                    {
+                        transform.position += dir * dist;
+                        // 침투 분리 시 속도 약간 감쇠 (튕김 느낌)
+                        CurrentSpeed *= 0.6f;
+                    }
+                }
+            }
         }
 
         // 진단 로그용 (한 번만 출력)
         private bool _diagLogged;
+
+        // 침투 분리용 — 자기 collider 중 하나 (보통 root의 BoxCollider)
+        private Collider _myColliderForPenetration;
+        private static readonly Collider[] _penetBuf = new Collider[16];
+
+        // 브레이크 코루틴 (하차 시 점진 감속)
+        private Coroutine _brakeRoutine;
+        public bool IsBraking => _brakeRoutine != null;
+
+        /// <summary>현재 속도에서 0까지 점진 감속한 후 콜백. 입력 무시.</summary>
+        public void BrakeToStop(float duration, System.Action onStopped = null)
+        {
+            if (_brakeRoutine != null) StopCoroutine(_brakeRoutine);
+            _brakeRoutine = StartCoroutine(BrakeRoutine(Mathf.Max(0.1f, duration), onStopped));
+        }
+
+        private IEnumerator BrakeRoutine(float duration, System.Action onStopped)
+        {
+            float startSpeed = CurrentSpeed;
+            float t = 0f;
+            while (t < duration)
+            {
+                t += Time.deltaTime;
+                float ratio = 1f - Mathf.Clamp01(t / duration);
+                CurrentSpeed = startSpeed * ratio;
+                // 감속 동안 입력 받지 않게 input.DriveAxis는 무시 (Update에서 모드 체크).
+                Vector3 delta = transform.forward * CurrentSpeed * Time.deltaTime;
+                if (delta.sqrMagnitude > 1e-6f) MoveWithSlide(delta);
+                yield return null;
+            }
+            CurrentSpeed = 0f;
+            _brakeRoutine = null;
+            onStopped?.Invoke();
+        }
 
         void Start()
         {
@@ -129,6 +222,7 @@ namespace LastPatrol.Systems.Vehicle
             }
 
             if (input.CurrentMode != InputReader.Mode.Drive) return;
+            if (IsBraking) return; // 점진 감속 중엔 입력 무시 (BrakeRoutine이 직접 이동)
 
             float dt = Time.deltaTime;
             Vector2 axis = input.DriveAxis;

@@ -66,11 +66,21 @@ namespace LastPatrol.Systems.Encounter
         private float _aliveTime;
         private float _fleeStartTime;
         private Collider[] _ownColliders;
+        private Collider _myColliderForPenetration;
         private static readonly RaycastHit[] _hitBuf = new RaycastHit[16];
+        private static readonly Collider[] _penetBuf = new Collider[16];
 
         void Awake()
         {
             _ownColliders = GetComponentsInChildren<Collider>(true);
+            for (int i = 0; i < _ownColliders.Length; i++)
+            {
+                if (_ownColliders[i] != null && !_ownColliders[i].isTrigger)
+                {
+                    _myColliderForPenetration = _ownColliders[i];
+                    break;
+                }
+            }
             _selfHealth = GetComponent<VehicleHealth>();
             if (_selfHealth != null) _selfHealth.OnDeath += HandleSelfDeath;
 
@@ -197,6 +207,41 @@ namespace LastPatrol.Systems.Encounter
             }
 
             transform.position += delta;
+        }
+
+        void LateUpdate()
+        {
+            if (_myColliderForPenetration == null) return;
+
+            int count = Physics.OverlapBoxNonAlloc(
+                transform.position,
+                boxHalfExtents,
+                _penetBuf,
+                transform.rotation,
+                obstacleMask,
+                QueryTriggerInteraction.Ignore);
+
+            for (int i = 0; i < count; i++)
+            {
+                var other = _penetBuf[i];
+                if (other == null || other.isTrigger) continue;
+                if (IsOwn(other)) continue;
+                if (Physics.ComputePenetration(
+                    _myColliderForPenetration,
+                    _myColliderForPenetration.transform.position,
+                    _myColliderForPenetration.transform.rotation,
+                    other,
+                    other.transform.position,
+                    other.transform.rotation,
+                    out Vector3 dir, out float dist))
+                {
+                    if (dist > 0.001f)
+                    {
+                        transform.position += dir * dist;
+                        CurrentSpeed *= 0.6f;
+                    }
+                }
+            }
         }
 
         private bool CastBlocked(Vector3 d)

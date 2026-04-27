@@ -36,6 +36,13 @@ namespace LastPatrol.Characters.M07
         void Awake()
         {
             controller = GetComponent<CharacterController>();
+
+            // prefab 인스턴스로 들어왔을 때 target 참조 missing 가능 → 마렌 자동 검색.
+            if (target == null)
+            {
+                var maren = FindAnyObjectByType<LastPatrol.Characters.MarenController>();
+                if (maren != null) target = maren.transform;
+            }
         }
 
         public void Tick()

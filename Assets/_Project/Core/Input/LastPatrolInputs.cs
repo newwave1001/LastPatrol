@@ -172,6 +172,15 @@ public partial class @LastPatrolInputs: IInputActionCollection2, IDisposable
                     ""processors"": """",
                     ""interactions"": """",
                     ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""Mount"",
+                    ""type"": ""Button"",
+                    ""id"": ""1a2b3c4d-0001-0000-0000-00000000000A"",
+                    ""expectedControlType"": ""Button"",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
                 }
             ],
             ""bindings"": [
@@ -310,7 +319,7 @@ public partial class @LastPatrolInputs: IInputActionCollection2, IDisposable
                 {
                     ""name"": """",
                     ""id"": ""2a2b3c4d-2000-0000-0000-000000000003"",
-                    ""path"": ""<Keyboard>/f"",
+                    ""path"": ""<Keyboard>/e"",
                     ""interactions"": """",
                     ""processors"": """",
                     ""groups"": """",
@@ -370,6 +379,17 @@ public partial class @LastPatrolInputs: IInputActionCollection2, IDisposable
                     ""processors"": """",
                     ""groups"": """",
                     ""action"": ""Jump"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""2a2b3c4d-2000-0000-0000-000000000009"",
+                    ""path"": ""<Keyboard>/f"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""Mount"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
                 }
@@ -613,6 +633,7 @@ public partial class @LastPatrolInputs: IInputActionCollection2, IDisposable
         m_Player_Pause = m_Player.FindAction("Pause", throwIfNotFound: true);
         m_Player_Board = m_Player.FindAction("Board", throwIfNotFound: true);
         m_Player_Jump = m_Player.FindAction("Jump", throwIfNotFound: true);
+        m_Player_Mount = m_Player.FindAction("Mount", throwIfNotFound: true);
         // Drive
         m_Drive = asset.FindActionMap("Drive", throwIfNotFound: true);
         m_Drive_Move = m_Drive.FindAction("Move", throwIfNotFound: true);
@@ -710,6 +731,7 @@ public partial class @LastPatrolInputs: IInputActionCollection2, IDisposable
     private readonly InputAction m_Player_Pause;
     private readonly InputAction m_Player_Board;
     private readonly InputAction m_Player_Jump;
+    private readonly InputAction m_Player_Mount;
     /// <summary>
     /// Provides access to input actions defined in input action map "Player".
     /// </summary>
@@ -757,6 +779,10 @@ public partial class @LastPatrolInputs: IInputActionCollection2, IDisposable
         /// Provides access to the underlying input action "Player/Jump".
         /// </summary>
         public InputAction @Jump => m_Wrapper.m_Player_Jump;
+        /// <summary>
+        /// Provides access to the underlying input action "Player/Mount".
+        /// </summary>
+        public InputAction @Mount => m_Wrapper.m_Player_Mount;
         /// <summary>
         /// Provides access to the underlying input action map instance.
         /// </summary>
@@ -810,6 +836,9 @@ public partial class @LastPatrolInputs: IInputActionCollection2, IDisposable
             @Jump.started += instance.OnJump;
             @Jump.performed += instance.OnJump;
             @Jump.canceled += instance.OnJump;
+            @Mount.started += instance.OnMount;
+            @Mount.performed += instance.OnMount;
+            @Mount.canceled += instance.OnMount;
         }
 
         /// <summary>
@@ -848,6 +877,9 @@ public partial class @LastPatrolInputs: IInputActionCollection2, IDisposable
             @Jump.started -= instance.OnJump;
             @Jump.performed -= instance.OnJump;
             @Jump.canceled -= instance.OnJump;
+            @Mount.started -= instance.OnMount;
+            @Mount.performed -= instance.OnMount;
+            @Mount.canceled -= instance.OnMount;
         }
 
         /// <summary>
@@ -1104,6 +1136,13 @@ public partial class @LastPatrolInputs: IInputActionCollection2, IDisposable
         /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
         /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
         void OnJump(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "Mount" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnMount(InputAction.CallbackContext context);
     }
     /// <summary>
     /// Interface to implement callback methods for all input action callbacks associated with input actions defined by "Drive" which allows adding and removing callbacks.

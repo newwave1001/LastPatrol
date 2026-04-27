@@ -26,7 +26,7 @@ namespace LastPatrol.Systems.UI
         [SerializeField] private TMP_Text label;
 
         [Header("Display")]
-        [SerializeField] private string keyHint = "F";
+        [SerializeField] private string keyHint = "E";
         [SerializeField] private string actionVerb = "조사";
         [SerializeField] private float fadeSpeed = 10f;
 
@@ -48,22 +48,34 @@ namespace LastPatrol.Systems.UI
             if (source == null) source = FindAnyObjectByType<InteractionSystem>();
 
             if (autoBuildIfMissing && canvas == null) AutoBuild();
+
+            // 시작 시 무조건 숨김 — Canvas 자체를 비활성으로
+            if (canvas != null) canvas.gameObject.SetActive(false);
             if (canvasGroup != null) canvasGroup.alpha = 0f;
+            if (label != null) label.text = "";
         }
 
         void Update()
         {
-            if (label == null || canvasGroup == null) return;
+            if (canvas == null) return;
 
             // M-07 활성(마렌 Cower) 중엔 prompt 숨김
             bool blockedByMode = (maren != null && maren.CurrentMode != MarenController.ControlMode.Manual);
             var target = blockedByMode ? null : (source != null ? source.CurrentTarget : null);
+            bool show = target != null;
 
-            float wantAlpha = target != null ? 1f : 0f;
-            canvasGroup.alpha = Mathf.MoveTowards(canvasGroup.alpha, wantAlpha, fadeSpeed * Time.deltaTime);
+            // Canvas GameObject 자체를 토글 — 가장 강력한 표시/숨김
+            if (canvas.gameObject.activeSelf != show) canvas.gameObject.SetActive(show);
 
-            if (target != null)
+            if (label != null && show)
                 label.text = $"[<color=#D88A4A>{keyHint}</color>] {actionVerb}  ·  {target.PromptLabel}";
+
+            // CanvasGroup 페이드는 보조 — Canvas active일 때만 의미.
+            if (canvasGroup != null)
+            {
+                float wantAlpha = show ? 1f : 0f;
+                canvasGroup.alpha = Mathf.MoveTowards(canvasGroup.alpha, wantAlpha, fadeSpeed * Time.deltaTime);
+            }
         }
 
         // -------- Auto-build --------
@@ -102,7 +114,7 @@ namespace LastPatrol.Systems.UI
             rt.offsetMin = new Vector2(12f, 4f);
             rt.offsetMax = new Vector2(-12f, -4f);
             label = labelGo.AddComponent<TextMeshProUGUI>();
-            label.text = "[F] 조사";
+            label.text = ""; // 첫 프레임 default 보임 방지
             label.fontSize = 16;
             label.color = Ink;
             label.fontStyle = FontStyles.Bold;
