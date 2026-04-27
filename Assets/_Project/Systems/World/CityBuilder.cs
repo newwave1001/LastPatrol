@@ -161,7 +161,7 @@ namespace LastPatrol.Systems.World
             var tm = labelGo.AddComponent<TextMesh>();
             tm.text = text;
             tm.fontSize = 36;
-            tm.characterSize = 0.18f;
+            tm.characterSize = 0.054f; // 기존 0.18 → 30%
             tm.anchor = TextAnchor.MiddleCenter;
             tm.color = new Color(0.227f, 0.180f, 0.157f); // ink
         }
