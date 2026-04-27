@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using LastPatrol.Data;
 using LastPatrol.Systems.Dialogue;
+using LastPatrol.Systems.World;
 
 namespace LastPatrol.Systems.Investigation
 {
@@ -31,6 +32,14 @@ namespace LastPatrol.Systems.Investigation
         {
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
+
+            // 외부 운전 씬(S01)에서 ActiveCase가 설정되어 진입했다면 그 사건으로 시작.
+            // 직접 S03을 Play (디버그)할 땐 ActiveCase가 null이라 인스펙터 default 유지.
+            if (ActiveCase.HasCase)
+            {
+                currentCase = ActiveCase.Current;
+                discovered.Clear();
+            }
         }
 
         void Start()
@@ -109,6 +118,27 @@ namespace LastPatrol.Systems.Investigation
             if (currentCase.outroDialogue != null && DialogueSystem.Instance != null)
                 DialogueSystem.Instance.Show(currentCase.outroDialogue);
             OnCaseCompleted?.Invoke(currentCase);
+        }
+
+        // ---- Debug ----
+        // 인스펙터에서 InvestigationSystem 컴포넌트 우클릭 → "Force Complete Case (Debug)"
+        // 5개 단서 다 클릭 안 해도 종료 흐름(outro + OnCaseCompleted) 검증 가능.
+        [ContextMenu("Force Complete Case (Debug)")]
+        private void DebugForceComplete()
+        {
+            if (currentCase == null)
+            {
+                Debug.LogWarning("[Investigation] currentCase 없음. 강제 종료 무시.");
+                return;
+            }
+            if (currentCase.clues != null)
+                foreach (var c in currentCase.clues)
+                    if (c != null) discovered.Add(c.clueId);
+
+            if (currentCase.outroDialogue != null && DialogueSystem.Instance != null)
+                DialogueSystem.Instance.Show(currentCase.outroDialogue);
+            OnCaseCompleted?.Invoke(currentCase);
+            Debug.Log($"[Investigation] forced complete: {currentCase.caseId}");
         }
     }
 }

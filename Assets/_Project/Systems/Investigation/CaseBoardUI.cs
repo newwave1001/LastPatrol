@@ -1,12 +1,13 @@
 using System.Text;
 using TMPro;
 using UnityEngine;
-using UnityEngine.InputSystem;
+using LastPatrol.Core.Input;
 using LastPatrol.Data;
 
 namespace LastPatrol.Systems.Investigation
 {
-    // 사건 보드 패널. Tab 토글. 케이스의 단서를 4개 act (기/승/전/결) 섹션으로 그룹화.
+    // 사건 보드 패널. C 키 토글 (InputReader.OnBoardPressed). Tab은 PartyController가 캐릭터 전환에 사용.
+    // 케이스의 단서를 4개 act (기/승/전/결) 섹션으로 그룹화.
     // 미발견은 ???, 발견은 labelKR/EN. v11 status-panel 톤 맞춰 페이퍼+잉크+시안 보더.
     public class CaseBoardUI : MonoBehaviour
     {
@@ -18,6 +19,10 @@ namespace LastPatrol.Systems.Investigation
         [Header("Behavior")]
         [SerializeField] private bool startVisible = false;
 
+        [Header("Input")]
+        [Tooltip("InputReader.OnBoardPressed 구독. 비워두면 자동 검색.")]
+        [SerializeField] private InputReader input;
+
         [Header("Locale")]
         [SerializeField] private bool preferKorean = true;
 
@@ -27,6 +32,11 @@ namespace LastPatrol.Systems.Investigation
         static readonly string[] ActHeadersKR = { "기 · 起", "승 · 承", "전 · 轉", "결 · 結" };
         static readonly string[] ActHeadersEN = { "INTRO", "RISING", "TURN", "RESOLUTION" };
 
+        void Awake()
+        {
+            if (input == null) input = FindFirstObjectByType<InputReader>();
+        }
+
         void Start()
         {
             TrySubscribe();
@@ -34,21 +44,20 @@ namespace LastPatrol.Systems.Investigation
             Refresh();
         }
 
+        void OnEnable()
+        {
+            if (input != null) input.OnBoardPressed += Toggle;
+        }
+
         void OnDisable()
         {
+            if (input != null) input.OnBoardPressed -= Toggle;
             if (subscribed != null)
             {
                 subscribed.OnClueDiscovered -= HandleClueDiscovered;
                 subscribed.OnCaseCompleted -= HandleCaseCompleted;
                 subscribed = null;
             }
-        }
-
-        void Update()
-        {
-            // InputReader에 Board 액션 추가 전까지 임시 직접 읽기.
-            var kb = Keyboard.current;
-            if (kb != null && kb.tabKey.wasPressedThisFrame) Toggle();
         }
 
         public void Toggle() => SetVisible(!visible);

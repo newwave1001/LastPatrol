@@ -1,5 +1,7 @@
+using System;
 using UnityEngine;
 using LastPatrol.Core;
+using LastPatrol.Core.Input;
 
 namespace LastPatrol.Characters.M07
 {
@@ -8,6 +10,11 @@ namespace LastPatrol.Characters.M07
     [RequireComponent(typeof(FollowBehavior))]
     public class M07Controller : MonoBehaviour, IDamageable
     {
+        public enum ControlMode { Follow, Manual }
+
+        [Header("References")]
+        [SerializeField] private InputReader input;
+
         [Header("Battery")]
         [SerializeField] private float maxBattery = 100f;
         [SerializeField] private float idleDrainPerSecond = 0.5f;
@@ -23,6 +30,16 @@ namespace LastPatrol.Characters.M07
         private float currentHP;
         private bool isHacked;
 
+        public ControlMode CurrentMode { get; private set; } = ControlMode.Follow;
+        public event Action<ControlMode> OnModeChanged;
+
+        public void SetMode(ControlMode mode)
+        {
+            if (CurrentMode == mode) return;
+            CurrentMode = mode;
+            OnModeChanged?.Invoke(mode);
+        }
+
         public float CurrentBattery => currentBattery;
         public float MaxBattery => maxBattery;
         public float BatteryPercent => maxBattery > 0f ? currentBattery / maxBattery : 0f;
@@ -34,12 +51,23 @@ namespace LastPatrol.Characters.M07
             follow = GetComponent<FollowBehavior>();
             currentBattery = maxBattery;
             currentHP = maxHP;
+            if (input == null) input = FindFirstObjectByType<InputReader>();
         }
 
         void Update()
         {
             if (!IsAlive) return;
-            follow.Tick();
+
+            if (CurrentMode == ControlMode.Follow)
+            {
+                follow.Tick();
+            }
+            else // Manual — 플레이어가 Tab으로 M-07 직접 조종
+            {
+                Vector2 axis = input != null ? input.MoveAxis : Vector2.zero;
+                follow.ManualMove(axis);
+            }
+
             DrainBattery();
         }
 

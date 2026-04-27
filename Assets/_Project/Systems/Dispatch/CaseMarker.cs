@@ -1,4 +1,5 @@
 using UnityEngine;
+using LastPatrol.Data;
 
 namespace LastPatrol.Systems.Dispatch
 {
@@ -13,11 +14,13 @@ namespace LastPatrol.Systems.Dispatch
     public class CaseMarker : MonoBehaviour
     {
         [Header("Case Info")]
-        [Tooltip("무전 코드. 예: CASE-0417")]
+        [Tooltip("선택. 연결되면 ActiveCase로 전달되어 실내 씬에서 자동 로드됨.")]
+        [SerializeField] private CaseDataSO caseData;
+        [Tooltip("무전 코드. caseData 있으면 caseData.caseId 우선.")]
         [SerializeField] private string caseId = "CASE-0417";
-        [Tooltip("주소/장소 텍스트. ON SCENE 표시에 사용. 예: WESTSIDE 132")]
+        [Tooltip("주소/장소 텍스트. caseData 있으면 caseData.caseAddressKR 우선.")]
         [SerializeField] private string addressText = "WESTSIDE 132";
-        [Tooltip("선택. 무전 첫 줄에 추가될 짧은 설명. 예: '주거지 이상 신고'")]
+        [Tooltip("선택. 무전 첫 줄에 추가될 짧은 설명.")]
         [TextArea, SerializeField] private string dispatchBlurb = "주거지 이상 신고";
 
         [Header("Gizmo (editor)")]
@@ -25,8 +28,9 @@ namespace LastPatrol.Systems.Dispatch
         [SerializeField] private float gizmoRadius = 1.2f;
         [SerializeField] private float gizmoPoleHeight = 5f;
 
-        public string CaseId => caseId;
-        public string AddressText => addressText;
+        public CaseDataSO CaseData => caseData;
+        public string CaseId => caseData != null && !string.IsNullOrEmpty(caseData.caseId) ? caseData.caseId : caseId;
+        public string AddressText => caseData != null && !string.IsNullOrEmpty(caseData.caseAddressKR) ? caseData.caseAddressKR : addressText;
         public string DispatchBlurb => dispatchBlurb;
         public Vector3 Position => transform.position;
 

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using LastPatrol.Core.Input;
 using LastPatrol.Data;
 using LastPatrol.Systems.Investigation;
 
@@ -18,7 +19,18 @@ namespace LastPatrol.Systems.UI
         [Header("Display")]
         [SerializeField] private string headerText = "어떻게 할까";
 
-        void Awake() => HideImmediate();
+        [Header("Input Lock")]
+        [Tooltip("모달 표시 중 캐릭터 이동 입력 차단. 비워두면 자동 검색.")]
+        [SerializeField] private InputReader inputToLock;
+        [SerializeField] private bool lockInputWhileVisible = true;
+
+        private bool _inputLocked;
+
+        void Awake()
+        {
+            HideImmediate();
+            if (inputToLock == null) inputToLock = FindFirstObjectByType<InputReader>();
+        }
 
         void OnEnable()
         {
@@ -38,6 +50,21 @@ namespace LastPatrol.Systems.UI
                 flow.OnChoicesClosed -= Hide;
             }
             foreach (var b in buttons) if (b != null) b.OnClicked -= HandlePicked;
+            ReleaseInputLock();
+        }
+
+        private void AcquireInputLock()
+        {
+            if (!lockInputWhileVisible || _inputLocked || inputToLock == null) return;
+            inputToLock.PushLock();
+            _inputLocked = true;
+        }
+
+        private void ReleaseInputLock()
+        {
+            if (!_inputLocked || inputToLock == null) return;
+            inputToLock.PopLock();
+            _inputLocked = false;
         }
 
         void HandleChoicesReady(ClueDataSO clue)
@@ -52,6 +79,7 @@ namespace LastPatrol.Systems.UI
                 else buttons[i].Clear();
             }
             SetVisible(true);
+            AcquireInputLock();
         }
 
         void HandlePicked(InvestigationChoice c)
@@ -59,7 +87,11 @@ namespace LastPatrol.Systems.UI
             if (flow != null) flow.SubmitChoice(c);
         }
 
-        void Hide() => SetVisible(false);
+        void Hide()
+        {
+            SetVisible(false);
+            ReleaseInputLock();
+        }
 
         void HideImmediate()
         {

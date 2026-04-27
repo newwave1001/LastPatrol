@@ -154,6 +154,15 @@ public partial class @LastPatrolInputs: IInputActionCollection2, IDisposable
                     ""processors"": """",
                     ""interactions"": """",
                     ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""Board"",
+                    ""type"": ""Button"",
+                    ""id"": ""1a2b3c4d-0001-0000-0000-000000000008"",
+                    ""expectedControlType"": ""Button"",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
                 }
             ],
             ""bindings"": [
@@ -332,6 +341,17 @@ public partial class @LastPatrolInputs: IInputActionCollection2, IDisposable
                     ""action"": ""Pause"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""2a2b3c4d-2000-0000-0000-000000000007"",
+                    ""path"": ""<Keyboard>/c"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""Board"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
                 }
             ]
         },
@@ -370,6 +390,15 @@ public partial class @LastPatrolInputs: IInputActionCollection2, IDisposable
                     ""name"": ""Pause"",
                     ""type"": ""Button"",
                     ""id"": ""1a2b3c4d-0002-0000-0000-000000000004"",
+                    ""expectedControlType"": ""Button"",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""Beacon"",
+                    ""type"": ""Button"",
+                    ""id"": ""1a2b3c4d-0002-0000-0000-000000000005"",
                     ""expectedControlType"": ""Button"",
                     ""processors"": """",
                     ""interactions"": """",
@@ -519,6 +548,17 @@ public partial class @LastPatrolInputs: IInputActionCollection2, IDisposable
                     ""action"": ""Pause"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""2a2b3c4d-4000-0000-0000-000000000004"",
+                    ""path"": ""<Keyboard>/b"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""Beacon"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
                 }
             ]
         }
@@ -551,12 +591,14 @@ public partial class @LastPatrolInputs: IInputActionCollection2, IDisposable
         m_Player_Switch = m_Player.FindAction("Switch", throwIfNotFound: true);
         m_Player_Fire = m_Player.FindAction("Fire", throwIfNotFound: true);
         m_Player_Pause = m_Player.FindAction("Pause", throwIfNotFound: true);
+        m_Player_Board = m_Player.FindAction("Board", throwIfNotFound: true);
         // Drive
         m_Drive = asset.FindActionMap("Drive", throwIfNotFound: true);
         m_Drive_Move = m_Drive.FindAction("Move", throwIfNotFound: true);
         m_Drive_Boost = m_Drive.FindAction("Boost", throwIfNotFound: true);
         m_Drive_Exit = m_Drive.FindAction("Exit", throwIfNotFound: true);
         m_Drive_Pause = m_Drive.FindAction("Pause", throwIfNotFound: true);
+        m_Drive_Beacon = m_Drive.FindAction("Beacon", throwIfNotFound: true);
     }
 
     ~@LastPatrolInputs()
@@ -645,6 +687,7 @@ public partial class @LastPatrolInputs: IInputActionCollection2, IDisposable
     private readonly InputAction m_Player_Switch;
     private readonly InputAction m_Player_Fire;
     private readonly InputAction m_Player_Pause;
+    private readonly InputAction m_Player_Board;
     /// <summary>
     /// Provides access to input actions defined in input action map "Player".
     /// </summary>
@@ -684,6 +727,10 @@ public partial class @LastPatrolInputs: IInputActionCollection2, IDisposable
         /// Provides access to the underlying input action "Player/Pause".
         /// </summary>
         public InputAction @Pause => m_Wrapper.m_Player_Pause;
+        /// <summary>
+        /// Provides access to the underlying input action "Player/Board".
+        /// </summary>
+        public InputAction @Board => m_Wrapper.m_Player_Board;
         /// <summary>
         /// Provides access to the underlying input action map instance.
         /// </summary>
@@ -731,6 +778,9 @@ public partial class @LastPatrolInputs: IInputActionCollection2, IDisposable
             @Pause.started += instance.OnPause;
             @Pause.performed += instance.OnPause;
             @Pause.canceled += instance.OnPause;
+            @Board.started += instance.OnBoard;
+            @Board.performed += instance.OnBoard;
+            @Board.canceled += instance.OnBoard;
         }
 
         /// <summary>
@@ -763,6 +813,9 @@ public partial class @LastPatrolInputs: IInputActionCollection2, IDisposable
             @Pause.started -= instance.OnPause;
             @Pause.performed -= instance.OnPause;
             @Pause.canceled -= instance.OnPause;
+            @Board.started -= instance.OnBoard;
+            @Board.performed -= instance.OnBoard;
+            @Board.canceled -= instance.OnBoard;
         }
 
         /// <summary>
@@ -804,6 +857,7 @@ public partial class @LastPatrolInputs: IInputActionCollection2, IDisposable
     private readonly InputAction m_Drive_Boost;
     private readonly InputAction m_Drive_Exit;
     private readonly InputAction m_Drive_Pause;
+    private readonly InputAction m_Drive_Beacon;
     /// <summary>
     /// Provides access to input actions defined in input action map "Drive".
     /// </summary>
@@ -831,6 +885,10 @@ public partial class @LastPatrolInputs: IInputActionCollection2, IDisposable
         /// Provides access to the underlying input action "Drive/Pause".
         /// </summary>
         public InputAction @Pause => m_Wrapper.m_Drive_Pause;
+        /// <summary>
+        /// Provides access to the underlying input action "Drive/Beacon".
+        /// </summary>
+        public InputAction @Beacon => m_Wrapper.m_Drive_Beacon;
         /// <summary>
         /// Provides access to the underlying input action map instance.
         /// </summary>
@@ -869,6 +927,9 @@ public partial class @LastPatrolInputs: IInputActionCollection2, IDisposable
             @Pause.started += instance.OnPause;
             @Pause.performed += instance.OnPause;
             @Pause.canceled += instance.OnPause;
+            @Beacon.started += instance.OnBeacon;
+            @Beacon.performed += instance.OnBeacon;
+            @Beacon.canceled += instance.OnBeacon;
         }
 
         /// <summary>
@@ -892,6 +953,9 @@ public partial class @LastPatrolInputs: IInputActionCollection2, IDisposable
             @Pause.started -= instance.OnPause;
             @Pause.performed -= instance.OnPause;
             @Pause.canceled -= instance.OnPause;
+            @Beacon.started -= instance.OnBeacon;
+            @Beacon.performed -= instance.OnBeacon;
+            @Beacon.canceled -= instance.OnBeacon;
         }
 
         /// <summary>
@@ -994,6 +1058,13 @@ public partial class @LastPatrolInputs: IInputActionCollection2, IDisposable
         /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
         /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
         void OnPause(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "Board" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnBoard(InputAction.CallbackContext context);
     }
     /// <summary>
     /// Interface to implement callback methods for all input action callbacks associated with input actions defined by "Drive" which allows adding and removing callbacks.
@@ -1030,5 +1101,12 @@ public partial class @LastPatrolInputs: IInputActionCollection2, IDisposable
         /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
         /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
         void OnPause(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "Beacon" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnBeacon(InputAction.CallbackContext context);
     }
 }

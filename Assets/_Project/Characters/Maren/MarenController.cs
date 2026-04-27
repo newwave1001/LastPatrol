@@ -12,6 +12,8 @@ namespace LastPatrol.Characters
     [RequireComponent(typeof(InteractionSystem))]
     public class MarenController : MonoBehaviour, IDamageable
     {
+        public enum ControlMode { Manual, Cower }
+
         [Header("References")]
         [SerializeField] private InputReader input;
         [SerializeField] private M07.M07Controller robot;
@@ -20,6 +22,14 @@ namespace LastPatrol.Characters
         [SerializeField] private float maxHP = 100f;
         [SerializeField] private float chargeRange = 6.0f;
         [SerializeField] private float chargeRatePerSecond = 25f;
+
+        [Header("Cower (피신)")]
+        [Tooltip("M-07 근처 이 거리 안이면 멈춤.")]
+        [SerializeField] private float cowerStopRadius = 1.8f;
+        [Tooltip("이 거리 이상 떨어져 있으면 catch-up 속도로 이동.")]
+        [SerializeField] private float cowerCatchupRadius = 6f;
+        [Tooltip("M-07 활성 시 마렌 자동 엄폐 시도 (가까운 엄폐물 자동 진입). 1차는 false.")]
+        [SerializeField] private bool autoCoverWhenCowering = false;
 
         private CharacterMovement movement;
         private CoverSystem cover;
@@ -30,7 +40,17 @@ namespace LastPatrol.Characters
         public bool IsAlive => currentHP > 0f;
         public bool IsCharging { get; private set; }
 
+        public ControlMode CurrentMode { get; private set; } = ControlMode.Manual;
+
         public event Action OnDied;
+        public event Action<ControlMode> OnModeChanged;
+
+        public void SetMode(ControlMode mode)
+        {
+            if (CurrentMode == mode) return;
+            CurrentMode = mode;
+            OnModeChanged?.Invoke(mode);
+        }
 
         void Awake()
         {
@@ -55,11 +75,37 @@ namespace LastPatrol.Characters
             if (!IsAlive) return;
             if (input == null) return;
 
-            // 엄폐 중에는 이동 잠금 (v11 규칙 — 엄폐 시 위치 고정).
-            Vector2 move = cover.IsInCover ? Vector2.zero : input.MoveAxis;
-            movement.Tick(move);
-            cover.Tick(input.CoverHeld);
-            UpdateCharging();
+            if (CurrentMode == ControlMode.Manual)
+            {
+                // 엄폐 중에는 이동 잠금 (v11 규칙).
+                Vector2 move = cover.IsInCover ? Vector2.zero : input.MoveAxis;
+                movement.Tick(move);
+                cover.Tick(input.CoverHeld);
+                UpdateCharging();
+            }
+            else // Cower
+            {
+                Vector2 autoMove = ComputeCowerAxis();
+                movement.Tick(autoMove);
+                // Cower 동안엔 InputReader Charge/Interact 무시 (M-07이 활성).
+                IsCharging = false;
+                cover.Tick(autoCoverWhenCowering); // 자동 엄폐 옵션
+            }
+        }
+
+        /// <summary>M-07 쪽으로 가는 입력 axis. CharacterMovement.Tick(Vector2)에 그대로 전달.</summary>
+        private Vector2 ComputeCowerAxis()
+        {
+            if (robot == null) return Vector2.zero;
+            Vector3 toRobot = robot.transform.position - transform.position;
+            toRobot.y = 0f;
+            float dist = toRobot.magnitude;
+            if (dist <= cowerStopRadius) return Vector2.zero;
+            // 멀수록 풀스피드, cowerStopRadius 근처에서 점진적 감속
+            float t = Mathf.InverseLerp(cowerStopRadius, cowerCatchupRadius, dist);
+            float magnitude = Mathf.Clamp01(t);
+            Vector3 dir = toRobot / Mathf.Max(0.001f, dist);
+            return new Vector2(dir.x, dir.z) * magnitude;
         }
 
         private void UpdateCharging()

@@ -1,6 +1,7 @@
 using System.Collections;
 using TMPro;
 using UnityEngine;
+using LastPatrol.Core.Input;
 using LastPatrol.Systems.Investigation;
 
 namespace LastPatrol.Systems.UI
@@ -25,12 +26,39 @@ namespace LastPatrol.Systems.UI
         [SerializeField] private Color successColor = new Color(0.49f, 0.78f, 0.85f);
         [SerializeField] private Color failColor    = new Color(0.66f, 0.19f, 0.16f);
 
-        private Coroutine running;
+        [Header("Input Lock")]
+        [SerializeField] private InputReader inputToLock;
+        [SerializeField] private bool lockInputWhileVisible = true;
 
-        void Awake() { if (canvasGroup != null) canvasGroup.alpha = 0f; }
+        private Coroutine running;
+        private bool _inputLocked;
+
+        void Awake()
+        {
+            if (canvasGroup != null) canvasGroup.alpha = 0f;
+            if (inputToLock == null) inputToLock = FindFirstObjectByType<InputReader>();
+        }
 
         void OnEnable()  { if (flow != null) flow.OnRollShown += Show; }
-        void OnDisable() { if (flow != null) flow.OnRollShown -= Show; }
+        void OnDisable()
+        {
+            if (flow != null) flow.OnRollShown -= Show;
+            ReleaseInputLock();
+        }
+
+        private void AcquireInputLock()
+        {
+            if (!lockInputWhileVisible || _inputLocked || inputToLock == null) return;
+            inputToLock.PushLock();
+            _inputLocked = true;
+        }
+
+        private void ReleaseInputLock()
+        {
+            if (!_inputLocked || inputToLock == null) return;
+            inputToLock.PopLock();
+            _inputLocked = false;
+        }
 
         void Show(PlayerSkills.RollResult r)
         {
@@ -43,6 +71,7 @@ namespace LastPatrol.Systems.UI
                 resultText.color = r.success ? successColor : failColor;
             }
             if (running != null) StopCoroutine(running);
+            AcquireInputLock();
             running = StartCoroutine(ShowRoutine());
         }
 
@@ -52,6 +81,7 @@ namespace LastPatrol.Systems.UI
             yield return new WaitForSeconds(hold);
             yield return Fade(1f, 0f, fadeOut);
             running = null;
+            ReleaseInputLock();
         }
 
         IEnumerator Fade(float from, float to, float duration)

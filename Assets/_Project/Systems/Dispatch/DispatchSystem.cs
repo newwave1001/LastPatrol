@@ -87,6 +87,14 @@ namespace LastPatrol.Systems.Dispatch
                                "별도 부트스트랩 씬에서 DontDestroyOnLoad 인스턴스를 만들어야 함.");
                 return;
             }
+
+            // 사건 컨텍스트 전달 — 다음 씬(InvestigationSystem)이 ActiveCase.Current를 읽어 자동 로드.
+            if (marker != null && marker.CaseData != null)
+                ActiveCase.SetCurrent(marker.CaseData);
+
+            // 사건 종료 후 S01 복귀 시 차량을 "내가 내린 자리"에 다시 두기.
+            if (car != null) PlayerSpawnPoint.SetFromTransform(car.transform);
+
             SceneTransitionService.Instance.LoadScene(nextSceneOnArrival);
         }
 
@@ -128,10 +136,9 @@ namespace LastPatrol.Systems.Dispatch
             {
                 State = DispatchState.OnScene;
                 string addr = marker.AddressText;
-                string text = showEnterPrompt && !string.IsNullOrEmpty(nextSceneOnArrival)
-                    ? $"ON SCENE  ·  {addr}  ·  [F] ENTER"
-                    : $"ON SCENE  ·  {addr}";
-                hud.SetDispatch(text, DriveHUD.DispatchTone.Blood);
+                hud.SetDispatch($"ON SCENE  ·  {addr}", DriveHUD.DispatchTone.Blood);
+                if (showEnterPrompt && !string.IsNullOrEmpty(nextSceneOnArrival))
+                    hud.SetPrompt("[F] ENTER", DriveHUD.DispatchTone.Amber);
                 OnArrived?.Invoke();
             }
             else if (State == DispatchState.EnRoute && d < nearDistance)

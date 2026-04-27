@@ -1,6 +1,9 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.InputSystem;
+using LastPatrol.Core.Input;
 using LastPatrol.Data;
 
 namespace LastPatrol.Systems.Dialogue
@@ -22,24 +25,66 @@ namespace LastPatrol.Systems.Dialogue
         [Header("Locale")]
         [SerializeField] private bool preferKorean = true;
 
+        [Header("Skip Input")]
+        [Tooltip("대사 진행 중 마우스 좌클릭으로 스킵. " +
+                 "첫 클릭 = 타이프라이터 즉시 완성, 두 번째 = 다음 라인.")]
+        [SerializeField] private bool clickToSkip = true;
+        [Tooltip("키보드 Space/Enter 로도 스킵 가능.")]
+        [SerializeField] private bool keyboardSkip = true;
+
+        [Header("Input Lock")]
+        [Tooltip("대사 표시 중 캐릭터 이동/조작 입력 차단. 비워두면 자동 검색.")]
+        [SerializeField] private InputReader inputToLock;
+        [Tooltip("대사 중 입력 차단 활성화")]
+        [SerializeField] private bool lockInputDuringDialogue = true;
+
         private readonly Queue<DialogueLineSO> queue = new Queue<DialogueLineSO>();
         private Coroutine running;
         private bool skipRequested;
+        private bool _inputLocked; // PushLock/PopLock 균형 추적
 
         public bool IsActive => running != null;
+
+        /// <summary>큐가 비어 마지막 라인 hold까지 끝난 직후 발화. 페이드/씬 전환 트리거에 사용.</summary>
+        public event Action OnQueueEnded;
 
         void Awake()
         {
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
             if (panel != null) panel.Hide();
+            if (inputToLock == null) inputToLock = FindFirstObjectByType<InputReader>();
+        }
+
+        void OnDisable()
+        {
+            // 씬 전환·삭제 시 lock 잔재 방지.
+            ReleaseInputLock();
+        }
+
+        private void AcquireInputLock()
+        {
+            if (!lockInputDuringDialogue || _inputLocked || inputToLock == null) return;
+            inputToLock.PushLock();
+            _inputLocked = true;
+        }
+
+        private void ReleaseInputLock()
+        {
+            if (!_inputLocked || inputToLock == null) return;
+            inputToLock.PopLock();
+            _inputLocked = false;
         }
 
         public void Show(DialogueLineSO line)
         {
             if (line == null) return;
             queue.Enqueue(line);
-            if (running == null) running = StartCoroutine(RunQueue());
+            if (running == null)
+            {
+                AcquireInputLock();
+                running = StartCoroutine(RunQueue());
+            }
         }
 
         // 런타임 inline — SO 에셋 없이 한 줄 표시. 내면 보이스 + 선택 결과에 사용.
@@ -58,7 +103,11 @@ namespace LastPatrol.Systems.Dialogue
         {
             if (seq == null) return;
             foreach (var l in seq.lines) if (l != null) queue.Enqueue(l);
-            if (running == null) running = StartCoroutine(RunQueue());
+            if (running == null)
+            {
+                AcquireInputLock();
+                running = StartCoroutine(RunQueue());
+            }
         }
 
         public void Clear()
@@ -66,9 +115,27 @@ namespace LastPatrol.Systems.Dialogue
             queue.Clear();
             if (running != null) { StopCoroutine(running); running = null; }
             if (panel != null) panel.Hide();
+            ReleaseInputLock();
         }
 
         public void Skip() { skipRequested = true; }
+
+        void Update()
+        {
+            if (running == null) return; // 대사 중이 아니면 무시
+
+            if (clickToSkip)
+            {
+                var mouse = Mouse.current;
+                if (mouse != null && mouse.leftButton.wasPressedThisFrame) Skip();
+            }
+            if (keyboardSkip)
+            {
+                var kb = Keyboard.current;
+                if (kb != null && (kb.spaceKey.wasPressedThisFrame || kb.enterKey.wasPressedThisFrame))
+                    Skip();
+            }
+        }
 
         private IEnumerator RunQueue()
         {
@@ -80,6 +147,8 @@ namespace LastPatrol.Systems.Dialogue
             }
             running = null;
             if (panel != null) panel.Hide();
+            ReleaseInputLock();
+            OnQueueEnded?.Invoke();
         }
 
         private IEnumerator PlayLine(DialogueLineSO line)

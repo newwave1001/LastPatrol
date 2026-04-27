@@ -67,6 +67,15 @@
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": false
+                },
+                {
+                    "name": "Board",
+                    "type": "Button",
+                    "id": "1a2b3c4d-0001-0000-0000-000000000008",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
                 }
             ],
             "bindings": [
@@ -245,6 +254,17 @@
                     "action": "Pause",
                     "isComposite": false,
                     "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "2a2b3c4d-2000-0000-0000-000000000007",
+                    "path": "<Keyboard>/c",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Board",
+                    "isComposite": false,
+                    "isPartOfComposite": false
                 }
             ]
         },
@@ -283,6 +303,15 @@
                     "name": "Pause",
                     "type": "Button",
                     "id": "1a2b3c4d-0002-0000-0000-000000000004",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "Beacon",
+                    "type": "Button",
+                    "id": "1a2b3c4d-0002-0000-0000-000000000005",
                     "expectedControlType": "Button",
                     "processors": "",
                     "interactions": "",
@@ -430,6 +459,17 @@
                     "processors": "",
                     "groups": "",
                     "action": "Pause",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "2a2b3c4d-4000-0000-0000-000000000004",
+                    "path": "<Keyboard>/b",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Beacon",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }

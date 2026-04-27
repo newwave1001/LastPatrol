@@ -1,5 +1,6 @@
 using UnityEngine;
 using LastPatrol.Core.Input;
+using LastPatrol.Systems.World;
 
 namespace LastPatrol.Systems.Vehicle
 {
@@ -93,6 +94,13 @@ namespace LastPatrol.Systems.Vehicle
 
         void Start()
         {
+            // 다른 씬에서 돌아왔다면 마지막 차량 위치로 텔레포트 (사건 종료 후 사건 현장 앞).
+            if (PlayerSpawnPoint.ConsumeIfAny(out Vector3 spawnPos, out Quaternion spawnRot))
+            {
+                transform.SetPositionAndRotation(spawnPos, spawnRot);
+                CurrentSpeed = 0f;
+            }
+
             if (input == null) input = GetComponent<InputReader>();
 
             if (input == null)

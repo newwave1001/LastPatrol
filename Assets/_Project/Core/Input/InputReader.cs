@@ -23,15 +23,22 @@ namespace LastPatrol.Core.Input
         public event Action OnInteractPressed;
         public event Action OnSwitchPressed;
         public event Action OnPausePressed;
+        public event Action OnBoardPressed;
 
         // --- Drive map ---
         public Vector2 DriveAxis { get; private set; }   // x = steer, y = throttle/reverse
         public bool BoostHeld { get; private set; }
 
         public event Action OnExitVehiclePressed;
+        public event Action OnBeaconPressed;
 
         public enum Mode { None, Foot, Drive }
         public Mode CurrentMode { get; private set; } = Mode.None;
+
+        // --- Lock (대사·시네매틱·메뉴 중 모든 입력 차단) ---
+        private int _lockCount;
+        private Mode _modeBeforeLock = Mode.None;
+        public bool IsLocked => _lockCount > 0;
 
         private LastPatrolInputs inputs;
 
@@ -55,6 +62,7 @@ namespace LastPatrol.Core.Input
             inputs.Player.Interact.performed += _ => OnInteractPressed?.Invoke();
             inputs.Player.Switch.performed   += _ => OnSwitchPressed?.Invoke();
             inputs.Player.Pause.performed    += _ => OnPausePressed?.Invoke();
+            inputs.Player.Board.performed    += _ => OnBoardPressed?.Invoke();
 
             // -- Drive --
             inputs.Drive.Move.performed += ctx => DriveAxis = ctx.ReadValue<Vector2>();
@@ -63,8 +71,9 @@ namespace LastPatrol.Core.Input
             inputs.Drive.Boost.performed += _ => BoostHeld = true;
             inputs.Drive.Boost.canceled  += _ => BoostHeld = false;
 
-            inputs.Drive.Exit.performed  += _ => OnExitVehiclePressed?.Invoke();
-            inputs.Drive.Pause.performed += _ => OnPausePressed?.Invoke();
+            inputs.Drive.Exit.performed   += _ => OnExitVehiclePressed?.Invoke();
+            inputs.Drive.Pause.performed  += _ => OnPausePressed?.Invoke();
+            inputs.Drive.Beacon.performed += _ => OnBeaconPressed?.Invoke();
         }
 
         void OnEnable()
@@ -78,26 +87,27 @@ namespace LastPatrol.Core.Input
 
         public void EnableFootControls()
         {
-            inputs.Drive.Disable();
-            inputs.Player.Enable();
             CurrentMode = Mode.Foot;
-
-            // 차량 상태 잔재 정리
             DriveAxis = Vector2.zero;
             BoostHeld = false;
+
+            // Lock 중이면 실제 enable은 보류. 모드만 기억해두고 Pop 시 복원.
+            if (IsLocked) { _modeBeforeLock = Mode.Foot; return; }
+
+            inputs.Drive.Disable();
+            inputs.Player.Enable();
         }
 
         public void EnableDriveControls()
         {
+            CurrentMode = Mode.Drive;
+            MoveAxis = Vector2.zero;
+            CoverHeld = ChargeHeld = FireHeld = false;
+
+            if (IsLocked) { _modeBeforeLock = Mode.Drive; return; }
+
             inputs.Player.Disable();
             inputs.Drive.Enable();
-            CurrentMode = Mode.Drive;
-
-            // 도보 상태 잔재 정리
-            MoveAxis = Vector2.zero;
-            CoverHeld = false;
-            ChargeHeld = false;
-            FireHeld = false;
         }
 
         public void DisableAll()
@@ -108,6 +118,49 @@ namespace LastPatrol.Core.Input
             MoveAxis = Vector2.zero;
             DriveAxis = Vector2.zero;
             CoverHeld = ChargeHeld = FireHeld = BoostHeld = false;
+        }
+
+        /// <summary>대사·시네매틱·메뉴 등에서 입력 일시 차단. Push/Pop 카운터라 nested OK.</summary>
+        public void PushLock()
+        {
+            _lockCount++;
+            if (_lockCount == 1)
+            {
+                _modeBeforeLock = CurrentMode;
+                inputs?.Player.Disable();
+                inputs?.Drive.Disable();
+                // 누르고 있던 키 즉시 해제
+                MoveAxis = Vector2.zero;
+                DriveAxis = Vector2.zero;
+                CoverHeld = ChargeHeld = FireHeld = BoostHeld = false;
+            }
+        }
+
+        public void PopLock()
+        {
+            if (_lockCount <= 0) return;
+            _lockCount--;
+            if (_lockCount == 0)
+            {
+                if (_modeBeforeLock == Mode.Foot)
+                {
+                    inputs?.Drive.Disable();
+                    inputs?.Player.Enable();
+                }
+                else if (_modeBeforeLock == Mode.Drive)
+                {
+                    inputs?.Player.Disable();
+                    inputs?.Drive.Enable();
+                }
+            }
+        }
+
+        /// <summary>비상시 강제 해제. 보통 PushLock/PopLock으로 균형 맞추는 게 정석.</summary>
+        public void ForceUnlock()
+        {
+            _lockCount = 0;
+            if (_modeBeforeLock == Mode.Foot)       EnableFootControls();
+            else if (_modeBeforeLock == Mode.Drive) EnableDriveControls();
         }
     }
 }

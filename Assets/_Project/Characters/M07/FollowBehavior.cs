@@ -1,4 +1,5 @@
 using UnityEngine;
+using LastPatrol.Systems.AI;
 
 namespace LastPatrol.Characters.M07
 {
@@ -21,6 +22,11 @@ namespace LastPatrol.Characters.M07
 
         [Header("Side Offset")]
         [SerializeField] private float sideOffset = 1.0f;
+
+        [Header("Obstacle Avoidance")]
+        [Tooltip("좌/우 회피 raycast 거리. 차/벽 사이 통로 폭 정도가 적당.")]
+        [SerializeField] private float steerLookAhead = 3f;
+        [SerializeField] private LayerMask obstacleMask = ~0;
 
         private CharacterController controller;
         private float verticalVelocity;
@@ -46,11 +52,45 @@ namespace LastPatrol.Characters.M07
             else if (dist > followRadius) speed = Mathf.Lerp(followSpeed, catchupSpeed, (dist - followRadius) / Mathf.Max(0.001f, catchupRadius - followRadius));
             else if (dist > stopRadius) speed = followSpeed * Mathf.InverseLerp(stopRadius, followRadius, dist);
 
-            Vector3 step = (dist > 0.001f ? toTarget / dist : Vector3.zero) * speed;
+            // 장애물 회피 — 7방향 cast 중 가장 빈 방향으로 진행
+            Vector3 dirNorm;
+            if (dist > 0.001f && speed > 0.001f)
+            {
+                Vector3 steered = SteeringHelper.ResolveDirection(
+                    toTarget, transform.position, steerLookAhead, obstacleMask);
+                dirNorm = steered;
+            }
+            else
+            {
+                dirNorm = Vector3.zero;
+            }
+            Vector3 step = dirNorm * speed;
 
             if (controller.isGrounded && verticalVelocity < 0f) verticalVelocity = -2f;
             verticalVelocity += -20f * Time.deltaTime;
 
+            controller.Move(new Vector3(step.x, verticalVelocity, step.z) * Time.deltaTime);
+        }
+
+        /// <summary>플레이어가 Tab으로 M-07 직접 조종할 때 호출. axis = (x: 좌우, y: 전후).</summary>
+        public void ManualMove(Vector2 axis)
+        {
+            if (controller == null) return;
+
+            Vector3 desired = new Vector3(axis.x, 0f, axis.y);
+            float mag = desired.magnitude;
+            Vector3 step = Vector3.zero;
+            if (mag > 0.01f)
+            {
+                Vector3 dir = desired / mag;
+                // 직접 조종에도 회피 적용 — 벽에 끼지 않게.
+                Vector3 steered = SteeringHelper.ResolveDirection(
+                    dir, transform.position, steerLookAhead, obstacleMask);
+                step = steered * catchupSpeed * Mathf.Clamp01(mag);
+            }
+
+            if (controller.isGrounded && verticalVelocity < 0f) verticalVelocity = -2f;
+            verticalVelocity += -20f * Time.deltaTime;
             controller.Move(new Vector3(step.x, verticalVelocity, step.z) * Time.deltaTime);
         }
     }
