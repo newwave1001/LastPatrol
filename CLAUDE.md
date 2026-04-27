@@ -4,7 +4,13 @@
 
 ## What This Is
 
-여경 마렌과 해킹 면역 로봇 M-07이 ELI(슈퍼컴퓨터)에 장악된 세계에서 사건을 수사하는 게임. 장르: 누아르 수사 × 호위 슈터 × 드라이빙 인카운터.
+여경 마렌과 해킹 면역 로봇 M-07이 ELI(슈퍼컴퓨터)에 장악된 세계에서 사건을 수사하는 게임.
+
+> **"그녀는 진실을 찾고, 그는 그녀를 지킨다."**
+
+**장르**: 수사 어드벤처 + 버디 액션 + 배터리 생존 관리 + 오픈월드 인카운터.
+
+**핵심 관계**: 로봇이 여자를 지키고, 여자가 로봇을 살린다. 배터리 시스템이 게임성과 감정선을 동시에 만든다. 자세한 컨셉 필러는 `Docs/Bible/last_patrol_concept_pillars_v01.md`.
 
 **현재 단계**: 코어 씬 1·3 통합 그레이박스 사이클 완성 + 외부 전투 메카닉(인카운터/하차/차량 강탈/엄폐) 작동.
 
@@ -200,7 +206,8 @@
 ## Reference Documents
 
 기획·디자인 자료는 `Docs/` 폴더에:
-- `Bible/last_patrol_bible_v03.md` — 메인 바이블 (가장 중요)
+- `Bible/last_patrol_concept_pillars_v01.md` — **컨셉 필러** (한 문장 정체성, 게임 루프, 배터리 관계, 3막, 차별점)
+- `Bible/last_patrol_bible_v03.md` — 메인 바이블 (상세 설정 — 캐릭터, 지역, 챕터)
 - `Architecture/s01_outdoor_driving_greybox_setup.md` — S01 셋업 + 백로그
 - `Architecture/last_patrol_unity_architecture_v01.md`
 - `Architecture/last_patrol_unity_folder_structure_v01.md`
