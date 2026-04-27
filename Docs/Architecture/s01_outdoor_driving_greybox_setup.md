@@ -137,10 +137,126 @@ Play 누르고 다음 확인:
 - 카메라가 어지럽다 → `Follow Smoothing` 낮추기 (0.04 ~ 0.06), `Look Ahead` 줄이기
 - 충돌이 이상하다 → `Box Half Extents` 차체와 정확히 맞추기, Obstacle 레이어 확인
 
-## 7. 다음 단계 (이번 주 외)
+## 7. HUD 셋업 (속도계 / 시계 / dispatch)
 
-- [ ] 도로/건물에 v05 마스터 지도 반영 (eirinen_master_map_v01.html 참조)
+**이미 작업된 코드:**
+- `Assets/_Project/Systems/World/GameClock.cs` — 게임 내 시간 (실시간 0.1초 = 게임 1초)
+- `Assets/_Project/Systems/UI/DriveHUD.cs` — 우상단 OnGUI HUD (페이퍼/잉크 톤)
+
+### 7.1 GameClock 배치
+
+씬에 빈 GameObject `World` (또는 기존 사용)에 **GameClock** 컴포넌트 추가.
+- Start Hour: 7, Start Minute: 14, Start Second: 0 (default OK)
+- Real Seconds Per Game Second: 0.1 (v04 정신 = 10× 가속)
+- Paused: ❌
+
+### 7.2 DriveHUD 배치
+
+빈 GameObject `HUD` 새로 만들거나 Main Camera에 **DriveHUD** 컴포넌트 추가.
+- Car: P_Car_Temp의 CarController 드래그 (비워도 Awake에서 자동 검색)
+- Clock: World의 GameClock 드래그 (비워도 자동 검색)
+- Show HUD: ✅
+- Margin / Box Size 기본값 (240×110 우상단)
+
+### 7.3 검증
+
+Play 후:
+- 우상단에 페이퍼색 박스, 잉크 텍스트로 큰 숫자(km/h) + KM/H + 시계(07:14:00 → 진행) + STANDBY
+- W로 가속하면 km/h 숫자 즉시 변동
+- 시계가 부드럽게 흘러감 (1초 실시간 ≈ 10초 게임 시간)
+
+### 7.4 외부에서 dispatch 변경 (다음 작업)
+
+```csharp
+hud.SetDispatch("CASE 12 NORDMAN", DriveHUD.DispatchTone.Cyan);
+hud.SetDispatch("ON SCENE", DriveHUD.DispatchTone.Blood);
+```
+
+## 8. Dispatch 시스템 셋업 (35초 후 사건 호출)
+
+**이미 작업된 코드:**
+- `Assets/_Project/Systems/Dispatch/CaseMarker.cs` — 사건 위치 컴포넌트 (caseId, addressText, dispatchBlurb)
+- `Assets/_Project/Systems/Dispatch/DispatchSystem.cs` — 타이머 + 거리 → HUD 전환 (Standby→EnRoute→Near→OnScene)
+
+### 8.1 CaseMarker 배치
+
+씬 빈 GameObject `CaseMarker_Nordman` 생성 → **CaseMarker** 컴포넌트 추가.
+- Position: 도로변 적당한 곳 (예: `(15, 0.5, 12)`)
+- Case Id: `CASE-0417` (default)
+- Address Text: `WESTSIDE 132` (또는 NORDMAN 12 등 시나리오에 맞게)
+- Dispatch Blurb: `주거지 이상 신고 — 가족 연락 두절`
+
+> Gizmo로 빨간 구 + 폴이 표시됨. Play 시 자동 숨김 → dispatch 시 활성화.
+
+### 8.2 DispatchSystem 배치
+
+빈 GameObject `Dispatch` 생성 → **DispatchSystem** 컴포넌트 추가.
+- 모든 References (Clock / HUD / Car / Marker) 비워둬도 Awake에서 자동 검색.
+- Dispatch At Game Second: **35** (기본)
+- Near Distance: 18, Arrived Distance: 6 (Unity 미터)
+- Hide Marker Until Dispatch: ✅
+
+### 8.3 검증
+
+Play 후:
+- 우상단 HUD에 `STANDBY` (잉크색)
+- 시계가 07:14:00에서 흘러 07:14:35 도달 (실시간 ≈ 3.5초) → HUD 전환:
+  - `EN ROUTE  ·  CASE-0417` (앰버)
+  - 콘솔에 `[Dispatch] CASE-0417 주거지 이상 신고...` 로그
+- CaseMarker GameObject가 켜짐 (Hierarchy에서 활성 표시)
+- 차량으로 마커 18m 이내 진입 → `NEAR  ·  WESTSIDE 132` (시안)
+- 6m 이내 도착 → `ON SCENE  ·  WESTSIDE 132` (블러드)
+
+### 8.4 외부 연결 포인트 (다음 단계)
+
+- `DispatchSystem.OnDispatched` 이벤트 → 사건 보드/대화 트리거
+- `DispatchSystem.OnArrived` 이벤트 → 실내 진입 프롬프트 (F = enter scene 3)
+- `CaseMarker`에 ScriptableObject `CaseDataSO` 참조 추가 → 데이터 외부화
+
+## 9. 씬 전환 셋업 (ON SCENE → F → S03)
+
+**이미 작업된 코드:**
+- `Assets/_Project/Systems/World/SceneTransitionService.cs` — 싱글톤 페이드+로드. DontDestroyOnLoad.
+- `Assets/_Project/Systems/Dispatch/DispatchSystem.cs` — ON SCENE 시 InputReader Exit(F) 구독 → 씬 로드.
+
+### 9.1 SceneTransitionService 배치
+
+씬에 빈 GameObject `_SceneTransitionService` (또는 기존 `World`에 같이) → **SceneTransitionService** 컴포넌트.
+- Default Fade Out: 0.6, Fade In: 0.4
+- Fade Color: Black (또는 잉크 #3A2E28)
+
+> 첫 씬에서 1번만 만들면 DontDestroyOnLoad로 다음 씬에도 살아남음. 다만 S03을 먼저 직접 Play할 때는
+> 거기에도 SceneTransitionService가 있는 게 안전. 두 번째 인스턴스는 Awake에서 자동 제거됨.
+
+### 9.2 Build Settings 등록
+
+**File → Build Profiles → Scene List**에 다음 씬 추가:
+1. `Assets/_Project/Scenes/S01_OutdoorDriving/S01_OutdoorDriving.unity` (index 0)
+2. `Assets/_Project/Scenes/S03_IndoorInvestigation/S03_IndoorInvestigation.unity` (index 1)
+
+> `nextSceneOnArrival` 기본값이 `S03_IndoorInvestigation` 이라 이름 일치 필요.
+> 등록 안 되어 있으면 콘솔에 `LoadSceneAsync(...) failed` 에러.
+
+### 9.3 DispatchSystem Inspector
+
+- Input 슬롯 비워두면 Awake에서 자동 검색 (P_Car_Temp의 InputReader)
+- Next Scene On Arrival: `S03_IndoorInvestigation` (default)
+- Show Enter Prompt: ✅ (HUD에 `[F] ENTER` 추가 표시)
+
+### 9.4 검증
+
+Play → 운전 → 35초 후 EN ROUTE → 마커 6m 이내 → HUD: `ON SCENE  ·  WESTSIDE 132  ·  [F] ENTER` (블러드)
+→ **F 키** → 검정 페이드 0.6초 → S03 로드 → 페이드 인 0.4초.
+
+> S03 안에서 S01로 돌아갈 트리거는 별도 작업 (OnExitVehiclePressed 동작이 InputReader 모드에 따라 다름).
+> 지금은 S03이 끝나면 Play 정지 또는 Edit 다시 S01 셋업.
+
+## 10. 백로그 (다음 단계)
+
+- [ ] S03 진입 시 사건 컨텍스트 전달 (CaseMarker 정보 → 사건 보드 표시)
 - [ ] 차량 헤드라이트 SpotLight + 비콘 토글 (B 키, mockup의 beacon)
-- [ ] HUD: 속도계, 시계, dispatch 상태 (mockup #speedo, #clock 참고)
-- [ ] 사건 마커 (Case Marker) 시스템 — 35초 후 dispatch 트리거
+- [ ] 도로/건물에 v05 마스터 지도 반영 (eirinen_master_map_v01.html 참조)
 - [ ] **Week 6-7**: 인카운터 시스템 (적 차량 추격 → 하차 트리거)
+- [ ] HUD를 OnGUI → TMP Canvas로 교체 (폴리싱 단계)
+- [ ] CaseMarker에 시각 자산 (폴 + 테이프) 자식 프리팹
+- [ ] S03 → S01 복귀 트리거 (사건 종료 후 외부로)
