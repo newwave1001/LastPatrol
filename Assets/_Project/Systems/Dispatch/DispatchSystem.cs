@@ -74,6 +74,9 @@ namespace LastPatrol.Systems.Dispatch
             if (dismount == null) dismount = FindAnyObjectByType<VehicleDismount>();
         }
 
+        /// <summary>차량 강탈 시 새 차로 갱신 — 거리 체크/PlayerSpawnPoint 기준 차 변경.</summary>
+        public void SetCar(CarController newCar) { car = newCar; }
+
         /// <summary>현재 활성 캐릭터(또는 차량) 위치. 거리 체크에 사용.</summary>
         public Vector3 GetActivePosition()
         {

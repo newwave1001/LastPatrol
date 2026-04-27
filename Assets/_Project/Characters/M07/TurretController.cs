@@ -83,9 +83,11 @@ namespace LastPatrol.Characters.M07
                 if (col == null) continue;
                 var dmg = col.GetComponentInParent<IDamageable>();
                 if (dmg == null || !dmg.IsAlive) continue;
-                // 자기 진영(M-07 자체) 제외 — IDamageable이 M07Controller이거나 같은 transform 계층이면 건너뜀
+                // 자기 진영(M-07 자체) 제외
                 if (dmg is M07Controller) continue;
                 if (dmg is LastPatrol.Characters.MarenController) continue;
+                // 차량은 isEnemy=true인 것만 적으로 인식 (마렌 차/주차 차 보호)
+                if (dmg is LastPatrol.Systems.Vehicle.VehicleHealth vh && !vh.IsEnemy) continue;
 
                 float d = Vector3.Distance(myPos, col.transform.position);
                 if (d < bestDist)

@@ -1,6 +1,8 @@
 using System.Collections;
 using UnityEngine;
+using LastPatrol.Core;
 using LastPatrol.Core.Input;
+using LastPatrol.Systems.Combat;
 using LastPatrol.Systems.World;
 
 namespace LastPatrol.Systems.Vehicle
@@ -78,6 +80,12 @@ namespace LastPatrol.Systems.Vehicle
         public float CurrentSpeed { get; private set; } // signed: + forward, - reverse
         public Vector3 Forward => transform.forward;
 
+        /// <summary>외부에서 InputReader 변경 (차량 강탈 시 ParkedVehicle.CarController에 마렌 차 InputReader 주입).</summary>
+        public void SetInput(InputReader newInput)
+        {
+            input = newInput;
+        }
+
         // 진단용
         private string _lastHitInfo = "(none)";
         private Collider[] _ownColliders;
@@ -88,8 +96,23 @@ namespace LastPatrol.Systems.Vehicle
             input = GetComponent<InputReader>();
         }
 
+        [Header("Cover (차량 뒤 엄폐)")]
+        [SerializeField] private bool spawnVehicleCover = true;
+        [SerializeField] private Vector3 coverLocalOffset = new Vector3(0f, 0f, -2.5f);
+        [SerializeField] private Vector3 coverColliderSize = new Vector3(2.5f, 2f, 1.5f);
+
+        // 파괴 상태 핸들링
+        private VehicleHealth _vehicleHealth;
+        public bool IsWreck => _vehicleHealth != null && _vehicleHealth.IsDestroyed;
+        private Cover _vehicleCover;
+
         void Awake()
         {
+            _vehicleHealth = GetComponent<VehicleHealth>();
+            if (_vehicleHealth != null) _vehicleHealth.OnDeath += HandleVehicleDeath;
+
+            if (spawnVehicleCover) EnsureVehicleCover();
+
             // 자기 자신 + 자식의 모든 collider를 캐시 → BoxCast 시 무시.
             _ownColliders = GetComponentsInChildren<Collider>(includeInactive: true);
 
@@ -148,8 +171,6 @@ namespace LastPatrol.Systems.Vehicle
             }
         }
 
-        // 진단 로그용 (한 번만 출력)
-        private bool _diagLogged;
 
         // 침투 분리용 — 자기 collider 중 하나 (보통 root의 BoxCollider)
         private Collider _myColliderForPenetration;
@@ -187,7 +208,11 @@ namespace LastPatrol.Systems.Vehicle
 
         void Start()
         {
-            // 다른 씬에서 돌아왔다면 마지막 차량 위치로 텔레포트 (사건 종료 후 사건 현장 앞).
+            // ParkedVehicle 등 시작 시 enabled=false인 차량은 input 검사 skip.
+            // (Awake가 enabled 끄지만 Start는 한 번 호출됨)
+            if (!enabled) return;
+
+            // 다른 씬에서 돌아왔다면 마지막 차량 위치로 텔레포트.
             if (PlayerSpawnPoint.ConsumeIfAny(out Vector3 spawnPos, out Quaternion spawnRot))
             {
                 transform.SetPositionAndRotation(spawnPos, spawnRot);
@@ -199,28 +224,68 @@ namespace LastPatrol.Systems.Vehicle
             if (input == null)
             {
                 Debug.LogError($"[CarController] '{name}': InputReader 참조 못 찾음. " +
-                               "같은 GameObject에 InputReader 컴포넌트가 있어야 함, " +
-                               "또는 Inspector의 Input 필드에 직접 드래그해줘야 함.", this);
+                               "같은 GameObject에 InputReader 컴포넌트가 있어야 함.", this);
                 return;
             }
 
             if (autoEnableDriveOnStart)
                 input.EnableDriveControls();
+        }
 
-            Debug.Log($"[CarController] Start | Input='{input.name}' | Mode={input.CurrentMode} | Pos={transform.position}", this);
+        private void HandleVehicleDeath()
+        {
+            CurrentSpeed = 0f;
+            enabled = false;
+            ApplyWreckedVisual();
+            KillCoverOccupantIfAny();
+        }
+
+        private void EnsureVehicleCover()
+        {
+            var coverGo = new GameObject("VehicleCover");
+            coverGo.transform.SetParent(transform, false);
+            coverGo.transform.localPosition = coverLocalOffset;
+            var col = coverGo.AddComponent<BoxCollider>();
+            col.isTrigger = true;
+            col.size = coverColliderSize;
+            _vehicleCover = coverGo.AddComponent<Cover>();
+        }
+
+        /// <summary>차 폭발 시 차 뒤에 엄폐 중인 마렌 사망 처리.</summary>
+        private void KillCoverOccupantIfAny()
+        {
+            if (_vehicleCover == null) return;
+            var maren = FindAnyObjectByType<LastPatrol.Characters.MarenController>(FindObjectsInactive.Include);
+            if (maren == null || !maren.gameObject.activeInHierarchy) return;
+            var coverSys = maren.GetComponent<LastPatrol.Characters.CoverSystem>();
+            if (coverSys == null || !coverSys.IsInCover) return;
+            if (coverSys.CurrentCover != _vehicleCover) return;
+            // 환경 데미지 — CoverSystem 차단 우회 (적 총알만 막힘)
+            maren.TakeDamage(99999f, DamageSource.Environment);
+        }
+
+        private void ApplyWreckedVisual()
+        {
+            // 자식 모든 Renderer 색상을 다크 회색으로 (그레이박스 표현).
+            // 모델 도입 시: 불 파티클 + 검댕 머티리얼로 교체 권장.
+            var rends = GetComponentsInChildren<Renderer>(true);
+            var mpb = new MaterialPropertyBlock();
+            Color wreck = new Color(0.15f, 0.13f, 0.12f);
+            int baseId = Shader.PropertyToID("_BaseColor");
+            int colorId = Shader.PropertyToID("_Color");
+            foreach (var r in rends)
+            {
+                if (r == null) continue;
+                r.GetPropertyBlock(mpb);
+                mpb.SetColor(baseId, wreck);
+                mpb.SetColor(colorId, wreck);
+                r.SetPropertyBlock(mpb);
+            }
         }
 
         void Update()
         {
             if (input == null) return;
-
-            // 첫 입력 발생 시 한 번 진단 로그 — Mode가 Drive가 아니면 여기서 잡힘
-            if (!_diagLogged && (input.DriveAxis.sqrMagnitude > 0.01f || input.MoveAxis.sqrMagnitude > 0.01f))
-            {
-                _diagLogged = true;
-                Debug.Log($"[CarController] First input | Mode={input.CurrentMode} | DriveAxis={input.DriveAxis} | FootMoveAxis={input.MoveAxis}", this);
-            }
-
             if (input.CurrentMode != InputReader.Mode.Drive) return;
             if (IsBraking) return; // 점진 감속 중엔 입력 무시 (BrakeRoutine이 직접 이동)
 

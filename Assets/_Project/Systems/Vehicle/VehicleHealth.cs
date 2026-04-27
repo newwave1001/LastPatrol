@@ -13,6 +13,11 @@ namespace LastPatrol.Systems.Vehicle
     [DisallowMultipleComponent]
     public class VehicleHealth : MonoBehaviour, IDamageable
     {
+        [Header("Faction")]
+        [Tooltip("M-07 자동 사격이 이 차를 적으로 볼지. 마렌 차/주차 차 false, 적 차량은 true.")]
+        [SerializeField] private bool isEnemy = false;
+        public bool IsEnemy => isEnemy;
+
         [Header("Health")]
         [SerializeField] private float maxHealth = 100f;
         [SerializeField] private float startHealthOverride = -1f; // -1 이면 maxHealth로 시작
@@ -28,6 +33,8 @@ namespace LastPatrol.Systems.Vehicle
         public float CurrentHealth { get; private set; }
         public float Normalized => CurrentHealth / Mathf.Max(1f, maxHealth);
         public bool IsAlive => CurrentHealth > 0f;
+        /// <summary>한 번 0 도달하면 영구 true. Heal 해도 안 풀림(파괴된 차).</summary>
+        public bool IsDestroyed { get; private set; }
 
         public event Action<float, DamageSource> OnDamaged; // amount, source
         public event Action<float> OnHealed;
@@ -45,7 +52,11 @@ namespace LastPatrol.Systems.Vehicle
             CurrentHealth = Mathf.Max(0f, CurrentHealth - effective);
             if (logDamage) Debug.Log($"[Health] {name} -{effective:F1} from {source} → {CurrentHealth:F1}/{maxHealth}", this);
             OnDamaged?.Invoke(effective, source);
-            if (CurrentHealth <= 0f) OnDeath?.Invoke();
+            if (CurrentHealth <= 0f)
+            {
+                IsDestroyed = true;
+                OnDeath?.Invoke();
+            }
         }
 
         public void Heal(float amount)

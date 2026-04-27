@@ -72,6 +72,13 @@ namespace LastPatrol.Systems.UI
 
         public void ClearPrompt() => _prompt = "";
 
+        /// <summary>차량 강탈 시 새 차로 갱신 — 속도/HP 표시가 새 차 기준.</summary>
+        public void SetCar(CarController newCar)
+        {
+            car = newCar;
+            carHealth = newCar != null ? newCar.GetComponent<VehicleHealth>() : null;
+        }
+
         void Awake()
         {
             if (car == null) car = FindAnyObjectByType<CarController>();

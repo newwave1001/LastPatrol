@@ -349,9 +349,9 @@
                     "initialStateCheck": false
                 },
                 {
-                    "name": "Beacon",
+                    "name": "Headlight",
                     "type": "Button",
-                    "id": "1a2b3c4d-0002-0000-0000-000000000005",
+                    "id": "1a2b3c4d-0002-0000-0000-000000000006",
                     "expectedControlType": "Button",
                     "processors": "",
                     "interactions": "",
@@ -504,12 +504,12 @@
                 },
                 {
                     "name": "",
-                    "id": "2a2b3c4d-4000-0000-0000-000000000004",
-                    "path": "<Keyboard>/b",
+                    "id": "2a2b3c4d-4000-0000-0000-000000000005",
+                    "path": "<Keyboard>/l",
                     "interactions": "",
                     "processors": "",
                     "groups": "",
-                    "action": "Beacon",
+                    "action": "Headlight",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }

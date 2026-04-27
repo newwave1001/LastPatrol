@@ -32,7 +32,7 @@ namespace LastPatrol.Core.Input
         public bool BoostHeld { get; private set; }
 
         public event Action OnExitVehiclePressed;
-        public event Action OnBeaconPressed;
+        public event Action OnHeadlightPressed;
 
         public enum Mode { None, Foot, Drive }
         public Mode CurrentMode { get; private set; } = Mode.None;
@@ -77,7 +77,7 @@ namespace LastPatrol.Core.Input
 
             inputs.Drive.Exit.performed   += _ => OnExitVehiclePressed?.Invoke();
             inputs.Drive.Pause.performed  += _ => OnPausePressed?.Invoke();
-            inputs.Drive.Beacon.performed += _ => OnBeaconPressed?.Invoke();
+            inputs.Drive.Headlight.performed += _ => OnHeadlightPressed?.Invoke();
         }
 
         void OnEnable()

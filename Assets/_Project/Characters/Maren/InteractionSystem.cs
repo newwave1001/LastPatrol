@@ -16,6 +16,12 @@ namespace LastPatrol.Characters
             CurrentTarget = FindNearest();
         }
 
+        void OnDisable()
+        {
+            // 마렌이 비활성(차 탑승)되면 target 즉시 클리어 — 잔존 prompt 방지.
+            CurrentTarget = null;
+        }
+
         public bool TryInteract()
         {
             if (CurrentTarget == null) return false;

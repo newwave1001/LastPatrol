@@ -56,32 +56,20 @@ namespace LastPatrol.Systems.Dispatch
                 box.isTrigger = true;
                 box.size = new Vector3(4f, 3f, 4f);
                 box.center = new Vector3(0f, 1.5f, 0f);
-                Debug.Log($"[CaseMarker] auto-added BoxCollider (4×3×4 trigger) on '{name}'.", this);
             }
             else
             {
-                // 기존 collider 있으면 그것 사용. trigger 강제.
                 if (!col.isTrigger) col.isTrigger = true;
             }
         }
 
-        // 한 번만 로그 (스팸 방지)
-        private bool _firstCanInteractLogged;
-
         public bool CanInteract(GameObject actor)
         {
-            if (!gameObject.activeInHierarchy) return false;
-            if (!_firstCanInteractLogged)
-            {
-                _firstCanInteractLogged = true;
-                Debug.Log($"[CaseMarker] CanInteract YES — first contact by {(actor != null ? actor.name : "?")}", this);
-            }
-            return true;
+            return gameObject.activeInHierarchy;
         }
 
         public void Interact(GameObject actor)
         {
-            Debug.Log($"[CaseMarker] Interact by {(actor != null ? actor.name : "?")} — entering scene", this);
             if (_dispatch == null) _dispatch = FindAnyObjectByType<DispatchSystem>();
             if (_dispatch == null)
             {

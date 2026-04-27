@@ -30,12 +30,16 @@ namespace LastPatrol.Systems.UI
         [SerializeField] private string actionVerb = "조사";
         [SerializeField] private float fadeSpeed = 10f;
 
+        public enum ScreenAnchor { BottomCenter, TopCenter, MiddleCenter, BottomLeft, BottomRight, TopLeft, TopRight }
+
         [Header("Auto Build")]
         [SerializeField] private bool autoBuildIfMissing = true;
         [SerializeField] private TMP_FontAsset preferredFont;
         [SerializeField] private Vector2 panelSize = new Vector2(280f, 36f);
-        [Tooltip("화면 하단으로부터 떨어진 거리(px).")]
-        [SerializeField] private float bottomOffset = 80f;
+        [Tooltip("화면 위치 anchor. 자유롭게 변경 가능.")]
+        [SerializeField] private ScreenAnchor anchor = ScreenAnchor.BottomCenter;
+        [Tooltip("anchor에서의 offset (x: 좌우, y: 상하). 양수 y는 anchor 안쪽 방향.")]
+        [SerializeField] private Vector2 anchorOffset = new Vector2(0f, 80f);
 
         // 페이퍼/잉크 톤
         static readonly Color Paper = new Color(0.961f, 0.933f, 0.878f, 0.92f);
@@ -43,13 +47,14 @@ namespace LastPatrol.Systems.UI
 
         void Awake()
         {
-            if (maren == null) maren = FindAnyObjectByType<MarenController>();
+            // 비활성 GameObject 포함 검색 — Maren_Outdoor는 시작 시 비활성이므로 Include 필요
+            if (maren == null) maren = FindAnyObjectByType<MarenController>(FindObjectsInactive.Include);
             if (source == null && maren != null) source = maren.GetComponent<InteractionSystem>();
-            if (source == null) source = FindAnyObjectByType<InteractionSystem>();
+            if (source == null) source = FindAnyObjectByType<InteractionSystem>(FindObjectsInactive.Include);
 
             if (autoBuildIfMissing && canvas == null) AutoBuild();
 
-            // 시작 시 무조건 숨김 — Canvas 자체를 비활성으로
+            // 시작 시 무조건 숨김
             if (canvas != null) canvas.gameObject.SetActive(false);
             if (canvasGroup != null) canvasGroup.alpha = 0f;
             if (label != null) label.text = "";
@@ -101,18 +106,16 @@ namespace LastPatrol.Systems.UI
             img.color = Paper;
             img.raycastTarget = false;
             panel = panelGo.GetComponent<RectTransform>();
-            panel.anchorMin = panel.anchorMax = new Vector2(0.5f, 0f);
-            panel.pivot = new Vector2(0.5f, 0f);
-            panel.anchoredPosition = new Vector2(0f, bottomOffset);
+            ApplyAnchor(panel);
             panel.sizeDelta = panelSize;
 
             var labelGo = new GameObject("Label");
             labelGo.transform.SetParent(panel, false);
-            var rt = labelGo.AddComponent<RectTransform>();
-            rt.anchorMin = Vector2.zero;
-            rt.anchorMax = Vector2.one;
-            rt.offsetMin = new Vector2(12f, 4f);
-            rt.offsetMax = new Vector2(-12f, -4f);
+            var labelRt = labelGo.AddComponent<RectTransform>();
+            labelRt.anchorMin = Vector2.zero;
+            labelRt.anchorMax = Vector2.one;
+            labelRt.offsetMin = new Vector2(12f, 4f);
+            labelRt.offsetMax = new Vector2(-12f, -4f);
             label = labelGo.AddComponent<TextMeshProUGUI>();
             label.text = ""; // 첫 프레임 default 보임 방지
             label.fontSize = 16;
@@ -122,6 +125,25 @@ namespace LastPatrol.Systems.UI
             label.richText = true;
             label.raycastTarget = false;
             if (preferredFont != null) label.font = preferredFont;
+        }
+
+        private void ApplyAnchor(RectTransform rt)
+        {
+            Vector2 a = Vector2.zero, p = Vector2.zero;
+            float xSign = 1f, ySign = 1f;
+            switch (anchor)
+            {
+                case ScreenAnchor.BottomCenter: a = new Vector2(0.5f, 0f); p = new Vector2(0.5f, 0f); ySign = +1f; break;
+                case ScreenAnchor.TopCenter:    a = new Vector2(0.5f, 1f); p = new Vector2(0.5f, 1f); ySign = -1f; break;
+                case ScreenAnchor.MiddleCenter: a = new Vector2(0.5f, 0.5f); p = new Vector2(0.5f, 0.5f); break;
+                case ScreenAnchor.BottomLeft:   a = new Vector2(0f, 0f); p = new Vector2(0f, 0f); ySign = +1f; xSign = +1f; break;
+                case ScreenAnchor.BottomRight:  a = new Vector2(1f, 0f); p = new Vector2(1f, 0f); ySign = +1f; xSign = -1f; break;
+                case ScreenAnchor.TopLeft:      a = new Vector2(0f, 1f); p = new Vector2(0f, 1f); ySign = -1f; xSign = +1f; break;
+                case ScreenAnchor.TopRight:     a = new Vector2(1f, 1f); p = new Vector2(1f, 1f); ySign = -1f; xSign = -1f; break;
+            }
+            rt.anchorMin = rt.anchorMax = a;
+            rt.pivot = p;
+            rt.anchoredPosition = new Vector2(anchorOffset.x * xSign, anchorOffset.y * ySign);
         }
     }
 }

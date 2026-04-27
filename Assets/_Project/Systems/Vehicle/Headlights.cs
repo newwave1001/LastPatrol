@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using LastPatrol.Core.Input;
 
 namespace LastPatrol.Systems.Vehicle
 {
@@ -16,6 +17,8 @@ namespace LastPatrol.Systems.Vehicle
         [SerializeField] private List<Light> spots = new List<Light>();
         [SerializeField] private bool defaultOn = true;
         [SerializeField] private CarController car;
+        [Tooltip("L 키 토글. 비워두면 자동 검색.")]
+        [SerializeField] private InputReader input;
 
         [Header("Subtle motion (Perlin)")]
         [Tooltip("최대 속도일 때 헤드라이트 떨림 강도(도). 0이면 비활성. " +
@@ -43,7 +46,32 @@ namespace LastPatrol.Systems.Vehicle
                     _baseLocalRot[i] = spots[i].transform.localRotation;
 
             if (car == null) car = GetComponent<CarController>();
+            if (input == null) input = FindAnyObjectByType<InputReader>(FindObjectsInactive.Include);
             SetOn(defaultOn);
+        }
+
+        void OnEnable()
+        {
+            if (input != null) input.OnHeadlightPressed += HandleToggle;
+        }
+
+        void OnDisable()
+        {
+            if (input != null) input.OnHeadlightPressed -= HandleToggle;
+        }
+
+        // 매번 자동 검색 비용 줄이기 — 캐시
+        private LastPatrol.Systems.Vehicle.VehicleDismount _dismount;
+
+        private void HandleToggle()
+        {
+            if (_dismount == null) _dismount = FindAnyObjectByType<LastPatrol.Systems.Vehicle.VehicleDismount>(FindObjectsInactive.Include);
+            // 현재 활성 차량의 Headlights만 토글
+            if (_dismount != null && _dismount.CurrentCar != null && car != null)
+            {
+                if (car != _dismount.CurrentCar) return;
+            }
+            Toggle();
         }
 
         public void SetOn(bool on)

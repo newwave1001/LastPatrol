@@ -2,6 +2,8 @@ using System.Collections;
 using UnityEngine;
 using LastPatrol.Core.Input;
 using LastPatrol.Systems.Dispatch;
+using LastPatrol.Systems.Encounter;
+using LastPatrol.Systems.UI;
 using LastPatrol.Systems.World;
 
 namespace LastPatrol.Systems.Vehicle
@@ -31,6 +33,9 @@ namespace LastPatrol.Systems.Vehicle
         [SerializeField] private TopDownCarCamera carCamera;
         [Tooltip("하차 시 활성, 승차 시 비활성. Tab 캐릭터 전환을 외부 씬에서 통제.")]
         [SerializeField] private PartyController partyController;
+        [Tooltip("차량 강탈 시 새 차로 갱신할 시스템들 (속도/HP/적 스폰 등).")]
+        [SerializeField] private DriveHUD driveHUD;
+        [SerializeField] private EncounterSpawner encounterSpawner;
 
         [Header("Dismount Position")]
         [Tooltip("차량 기준 마렌 스폰 offset. (right, up, forward). 기본 차 좌측 2.5m.")]
@@ -56,6 +61,7 @@ namespace LastPatrol.Systems.Vehicle
 
         public bool IsDismounted { get; private set; }
         public Transform MarenTransform => marenCharacter != null ? marenCharacter.transform : null;
+        public CarController CurrentCar => car;
 
         void Awake()
         {
@@ -64,9 +70,23 @@ namespace LastPatrol.Systems.Vehicle
             if (dispatch == null) dispatch = FindAnyObjectByType<DispatchSystem>();
             if (carCamera == null) carCamera = FindAnyObjectByType<TopDownCarCamera>();
             if (partyController == null) partyController = FindAnyObjectByType<PartyController>(FindObjectsInactive.Include);
+            if (driveHUD == null) driveHUD = FindAnyObjectByType<DriveHUD>();
+            if (encounterSpawner == null) encounterSpawner = FindAnyObjectByType<EncounterSpawner>();
 
             // 시작은 차 안 — PartyController 비활성 (Tab 무반응)
             if (partyController != null) partyController.gameObject.SetActive(false);
+        }
+
+        void Start()
+        {
+            // 시작 시 모든 차의 헤드라이트 OFF — 활성 차만 ON
+            var allHeadlights = FindObjectsByType<Headlights>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            foreach (var hl in allHeadlights) hl.SetOn(false);
+            if (car != null)
+            {
+                var hl = car.GetComponent<Headlights>();
+                if (hl != null) hl.SetOn(true);
+            }
         }
 
         void OnEnable()
@@ -87,11 +107,16 @@ namespace LastPatrol.Systems.Vehicle
             }
         }
 
-        // Foot 모드 F — 차 근처면 mount. 멀면 무시.
+        // Foot 모드 F — 차 근처면 mount. 멀면 무시. 파괴된 차도 거부.
         private void HandleMount()
         {
             if (!IsDismounted || _transitioning) return;
             if (marenCharacter == null || car == null) return;
+            if (car.IsWreck)
+            {
+                if (logEvents) Debug.Log("[Dismount] 차가 파괴됐음 — 탑승 불가.", this);
+                return;
+            }
             float d = Vector3.Distance(marenCharacter.transform.position, car.transform.position);
             if (d > mountRadius) return;
             Mount();
@@ -166,9 +191,63 @@ namespace LastPatrol.Systems.Vehicle
             // PartyController 활성화 → Tab 전환 작동
             if (partyController != null) partyController.gameObject.SetActive(true);
 
+            // 하차 시 차 라이트 자동 OFF
+            if (car != null)
+            {
+                var hl = car.GetComponent<Headlights>();
+                if (hl != null) hl.SetOn(false);
+            }
+
             IsDismounted = true;
             _transitioning = false;
             if (logEvents) Debug.Log($"[Dismount] complete. Maren at {marenWorld}", this);
+        }
+
+        /// <summary>도시 다른 차에 갈아타기. 기존 차 비활성, 새 차로 마운트.</summary>
+        public void SwitchToVehicle(CarController newCar)
+        {
+            if (newCar == null) return;
+            if (newCar == car) { Mount(); return; }
+            if (newCar.IsWreck)
+            {
+                if (logEvents) Debug.Log("[Dismount] 그 차는 파괴된 상태 — 탑승 불가.", this);
+                return;
+            }
+
+            // 기존 차 비활성 + 라이트 OFF
+            if (car != null)
+            {
+                car.enabled = false;
+                var oldHl = car.GetComponent<Headlights>();
+                if (oldHl != null) oldHl.SetOn(false);
+            }
+
+            // 참조 교체
+            car = newCar;
+
+            // 새 차 라이트 ON (Mount가 다시 켜겠지만 SwitchToVehicle도 Mount 호출 안 할 수도 있어 명시)
+            var newHl = newCar.GetComponent<Headlights>();
+            if (newHl != null) newHl.SetOn(true);
+
+            // 핵심: 새 차에 InputReader 주입 (ParkedVehicle은 InputReader 없음)
+            if (input != null) car.SetInput(input);
+
+            // 카메라 target 변경
+            if (carCamera != null) carCamera.SetTarget(car.transform);
+
+            // 다른 시스템들도 새 차로 갱신 — 속도/HP/적 스폰
+            if (driveHUD != null) driveHUD.SetCar(car);
+            if (dispatch != null) dispatch.SetCar(car);
+            if (encounterSpawner != null) encounterSpawner.SetTarget(car);
+
+            // 도보였으면 마운트로
+            if (IsDismounted) Mount();
+            else
+            {
+                car.enabled = true;
+            }
+
+            if (logEvents) Debug.Log($"[Dismount] switched to vehicle '{newCar.name}' (input transferred)", this);
         }
 
         [ContextMenu("Force Mount (Debug)")]
@@ -191,6 +270,13 @@ namespace LastPatrol.Systems.Vehicle
 
             // PartyController 비활성 → Tab 무반응으로
             if (partyController != null) partyController.gameObject.SetActive(false);
+
+            // 승차 시 차 라이트 자동 ON
+            if (car != null)
+            {
+                var hl = car.GetComponent<Headlights>();
+                if (hl != null) hl.SetOn(true);
+            }
 
             IsDismounted = false;
             if (logEvents) Debug.Log("[Dismount] re-mounted vehicle.", this);

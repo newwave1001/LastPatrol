@@ -20,9 +20,8 @@ namespace LastPatrol.Systems.World
         [SerializeField] private Transform marenTarget;
         [SerializeField] private Transform m07Target;
 
-        [Header("Behavior")]
-        [Tooltip("타겟 변경 시 즉시(Cut) 또는 Cinemachine Blend로 부드럽게.")]
-        [SerializeField] private bool useBlend = true;
+        // 타겟 전환 시 부드러움/즉시 컷은 Cinemachine Brain의 Default Blend 설정으로 제어.
+        // (CinemachineCamera.Target.TrackingTarget 변경 → Brain이 자동 blend.)
 
         void Awake()
         {
@@ -64,8 +63,6 @@ namespace LastPatrol.Systems.World
 
             // Cinemachine 3.x: Target.TrackingTarget이 새 표준 + 옛 Follow도 호환.
             vcam.Target.TrackingTarget = t;
-            // useBlend=false 일 때 즉시 컷 — Brain의 default blend 무시하고 한 프레임만 0초 전환은 별도 옵션 필요.
-            // 그레이박스 단계엔 default blend(보통 0.5~2초)가 자연스럽다.
         }
 
         [ContextMenu("Apply Now (Debug)")]

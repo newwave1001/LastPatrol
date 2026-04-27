@@ -436,9 +436,9 @@ public partial class @LastPatrolInputs: IInputActionCollection2, IDisposable
                     ""initialStateCheck"": false
                 },
                 {
-                    ""name"": ""Beacon"",
+                    ""name"": ""Headlight"",
                     ""type"": ""Button"",
-                    ""id"": ""1a2b3c4d-0002-0000-0000-000000000005"",
+                    ""id"": ""1a2b3c4d-0002-0000-0000-000000000006"",
                     ""expectedControlType"": ""Button"",
                     ""processors"": """",
                     ""interactions"": """",
@@ -591,12 +591,12 @@ public partial class @LastPatrolInputs: IInputActionCollection2, IDisposable
                 },
                 {
                     ""name"": """",
-                    ""id"": ""2a2b3c4d-4000-0000-0000-000000000004"",
-                    ""path"": ""<Keyboard>/b"",
+                    ""id"": ""2a2b3c4d-4000-0000-0000-000000000005"",
+                    ""path"": ""<Keyboard>/l"",
                     ""interactions"": """",
                     ""processors"": """",
                     ""groups"": """",
-                    ""action"": ""Beacon"",
+                    ""action"": ""Headlight"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
                 }
@@ -640,7 +640,7 @@ public partial class @LastPatrolInputs: IInputActionCollection2, IDisposable
         m_Drive_Boost = m_Drive.FindAction("Boost", throwIfNotFound: true);
         m_Drive_Exit = m_Drive.FindAction("Exit", throwIfNotFound: true);
         m_Drive_Pause = m_Drive.FindAction("Pause", throwIfNotFound: true);
-        m_Drive_Beacon = m_Drive.FindAction("Beacon", throwIfNotFound: true);
+        m_Drive_Headlight = m_Drive.FindAction("Headlight", throwIfNotFound: true);
     }
 
     ~@LastPatrolInputs()
@@ -921,7 +921,7 @@ public partial class @LastPatrolInputs: IInputActionCollection2, IDisposable
     private readonly InputAction m_Drive_Boost;
     private readonly InputAction m_Drive_Exit;
     private readonly InputAction m_Drive_Pause;
-    private readonly InputAction m_Drive_Beacon;
+    private readonly InputAction m_Drive_Headlight;
     /// <summary>
     /// Provides access to input actions defined in input action map "Drive".
     /// </summary>
@@ -950,9 +950,9 @@ public partial class @LastPatrolInputs: IInputActionCollection2, IDisposable
         /// </summary>
         public InputAction @Pause => m_Wrapper.m_Drive_Pause;
         /// <summary>
-        /// Provides access to the underlying input action "Drive/Beacon".
+        /// Provides access to the underlying input action "Drive/Headlight".
         /// </summary>
-        public InputAction @Beacon => m_Wrapper.m_Drive_Beacon;
+        public InputAction @Headlight => m_Wrapper.m_Drive_Headlight;
         /// <summary>
         /// Provides access to the underlying input action map instance.
         /// </summary>
@@ -991,9 +991,9 @@ public partial class @LastPatrolInputs: IInputActionCollection2, IDisposable
             @Pause.started += instance.OnPause;
             @Pause.performed += instance.OnPause;
             @Pause.canceled += instance.OnPause;
-            @Beacon.started += instance.OnBeacon;
-            @Beacon.performed += instance.OnBeacon;
-            @Beacon.canceled += instance.OnBeacon;
+            @Headlight.started += instance.OnHeadlight;
+            @Headlight.performed += instance.OnHeadlight;
+            @Headlight.canceled += instance.OnHeadlight;
         }
 
         /// <summary>
@@ -1017,9 +1017,9 @@ public partial class @LastPatrolInputs: IInputActionCollection2, IDisposable
             @Pause.started -= instance.OnPause;
             @Pause.performed -= instance.OnPause;
             @Pause.canceled -= instance.OnPause;
-            @Beacon.started -= instance.OnBeacon;
-            @Beacon.performed -= instance.OnBeacon;
-            @Beacon.canceled -= instance.OnBeacon;
+            @Headlight.started -= instance.OnHeadlight;
+            @Headlight.performed -= instance.OnHeadlight;
+            @Headlight.canceled -= instance.OnHeadlight;
         }
 
         /// <summary>
@@ -1180,11 +1180,11 @@ public partial class @LastPatrolInputs: IInputActionCollection2, IDisposable
         /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
         void OnPause(InputAction.CallbackContext context);
         /// <summary>
-        /// Method invoked when associated input action "Beacon" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// Method invoked when associated input action "Headlight" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
         /// </summary>
         /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
         /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
         /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
-        void OnBeacon(InputAction.CallbackContext context);
+        void OnHeadlight(InputAction.CallbackContext context);
     }
 }

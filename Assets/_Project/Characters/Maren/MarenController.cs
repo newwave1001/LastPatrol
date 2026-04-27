@@ -156,19 +156,10 @@ namespace LastPatrol.Characters
 
         private void HandleInteract()
         {
-            string targetName = interaction != null && interaction.CurrentTarget != null
-                ? interaction.CurrentTarget.PromptLabel : "(none)";
-            Debug.Log($"[Maren] HandleInteract called — alive={IsAlive}, mode={CurrentMode}, target={targetName}", this);
-
             if (!IsAlive) return;
             if (CurrentMode != ControlMode.Manual) return;
-            if (interaction == null)
-            {
-                Debug.LogError("[Maren] interaction null — InteractionSystem 누락", this);
-                return;
-            }
-            bool ok = interaction.TryInteract();
-            Debug.Log($"[Maren] TryInteract result={ok}", this);
+            if (interaction == null) return;
+            interaction.TryInteract();
         }
 
         public void TakeDamage(float amount, DamageSource source)

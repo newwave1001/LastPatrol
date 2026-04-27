@@ -21,12 +21,15 @@ namespace LastPatrol.Systems.Encounter
         [SerializeField] private DispatchSystem dispatchSystem;
 
         [Header("Trigger")]
-        [Tooltip("dispatch가 EnRoute 이상이 된 후 N초 경과 시 스폰. requireDispatched=false면 씬 시작 후 N초.")]
-        [SerializeField] private float spawnAfterSeconds = 30f;
-        [SerializeField] private bool requireDispatched = true;
+        [Tooltip("hunted/dispatched 상태가 된 후 N게임초 경과 시 스폰. 게임시간 5 = 실시간 0.5초 (10× 가속).")]
+        [SerializeField] private float spawnAfterSeconds = 5f;
+        [SerializeField] private bool requireDispatched = false;
         [Tooltip("PlayerStatus.IsHunted = true 인 동안에만 스폰. " +
                  "사건 완료 후부터 활성 — 누아르 톤 '진실을 안 자가 표적'.")]
         [SerializeField] private bool requireHunted = true;
+        [Tooltip("마렌 차 헤드라이트가 켜져있어야 스폰 (불빛이 적을 부른다).")]
+        [SerializeField] private bool requireHeadlightsOn = true;
+        [SerializeField] private LastPatrol.Systems.Vehicle.Headlights headlights;
         [SerializeField] private int maxSpawns = 1;
         [Tooltip("ON SCENE 도달 후 '이미 한 번 이상 스폰됐다면' 추가 스폰 안 함. " +
                  "처음 한 번은 OnScene이어도 시간 카운트 진행 (즉시 OnScene 시나리오 안전망).")]
@@ -49,10 +52,18 @@ namespace LastPatrol.Systems.Encounter
 
         public IReadOnlyList<EnemyVehicle> AliveEnemies => _alive;
 
+        /// <summary>차량 강탈 시 새 차로 갱신 — 적 스폰 위치 계산이 새 차 기준.</summary>
+        public void SetTarget(CarController newTarget)
+        {
+            target = newTarget;
+            headlights = newTarget != null ? newTarget.GetComponent<LastPatrol.Systems.Vehicle.Headlights>() : null;
+        }
+
         void Awake()
         {
             if (target == null) target = FindAnyObjectByType<CarController>();
             if (dispatchSystem == null) dispatchSystem = FindAnyObjectByType<DispatchSystem>();
+            if (headlights == null && target != null) headlights = target.GetComponent<LastPatrol.Systems.Vehicle.Headlights>();
         }
 
         void Update()
@@ -87,6 +98,12 @@ namespace LastPatrol.Systems.Encounter
             {
                 if (dispatchSystem == null) return false;
                 if (dispatchSystem.State < DispatchSystem.DispatchState.EnRoute) return false;
+            }
+            // 헤드라이트 OFF면 적 안 부름 — 어둠 속에 숨음
+            if (requireHeadlightsOn)
+            {
+                if (headlights == null && target != null) headlights = target.GetComponent<LastPatrol.Systems.Vehicle.Headlights>();
+                if (headlights == null || !headlights.IsOn) return false;
             }
             return true;
         }
