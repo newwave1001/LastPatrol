@@ -18,11 +18,11 @@ namespace LastPatrol.Systems.Encounter
         [SerializeField] private Transform target;
 
         [Header("Driving")]
-        [SerializeField] private float maxSpeed = 16f;
+        [SerializeField] private float maxSpeed = 18.4f;
         [Tooltip("스폰 직후 시작 속도. 0이면 정지 상태로 가속, maxSpeed면 이미 풀스피드로 달려오는 느낌. " +
-                 "위협적 진입을 위해 maxSpeed 80% 정도 권장.")]
-        [SerializeField] private float startSpeed = 13f;
-        [SerializeField] private float acceleration = 28f;
+                 "낮을수록 플레이어가 인식할 시간 확보.")]
+        [SerializeField] private float startSpeed = 9.2f;
+        [SerializeField] private float acceleration = 32.2f;
         [Tooltip("damping rate(1/sec). 마렌 차 friction과 동일 정신.")]
         [SerializeField] private float friction = 1.6f;
         [Tooltip("자동 회전 속도(rad/sec).")]
@@ -35,6 +35,27 @@ namespace LastPatrol.Systems.Encounter
         [Tooltip("박치기 후 다시 데미지 가능까지 대기(초). 너무 짧으면 한 번에 다 깎임.")]
         [SerializeField] private float ramCooldown = 0.6f;
         [SerializeField] private DamageSource ramDamageSource = DamageSource.Enemy;
+        [Header("Ram Charge (100km/h 돌진)")]
+        [Tooltip("플레이어 거리 이 값 미만 + 정렬 시 차징 모드. 28 m/s ≒ 100 km/h.")]
+        [SerializeField] private float ramChargeSpeed = 28f;
+        [SerializeField] private float ramChargeDistance = 18f;
+        [Tooltip("yawDiff 이 값 이내일 때만 차징 (도). 잘 정렬된 직진 박치기.")]
+        [SerializeField] private float ramChargeAlignDeg = 30f;
+
+        [Header("Ambush (박치기 후)")]
+        [Tooltip("플레이어 차에 박치기 hit 시 spawn할 휴머노이드 prefab. " +
+                 "어떤 prefab이든 드래그 가능 (OutdoorHumanoid 컴포넌트 자동 검출/추가).")]
+        [SerializeField] private GameObject humanoidPrefab;
+        [Tooltip("humanoidPrefab이 null일 때 fallback으로 만든 휴머노이드에 강제 부여할 bulletPrefab. " +
+                 "P_DroneBullet 등 일반 적 총알 드래그.")]
+        [SerializeField] private GameObject bulletPrefabForHumanoidFallback;
+        [SerializeField] private int humanoidsPerAmbush = 2;
+        [Tooltip("자기 차 옆쪽 어디에 배치할지 (좌/우 offset).")]
+        [SerializeField] private float humanoidSideOffset = 2.5f;
+        [Tooltip("스폰 후 이 시간(초) 안엔 AMBUSH 트리거 안 됨. 즉발 ambush 방지 안전망.")]
+        [SerializeField] private float ambushGracePeriod = 1.5f;
+        [Tooltip("AMBUSH 진단 로그 활성. 무엇에 박치고 무엇이 매칭됐는지 출력.")]
+        [SerializeField] private bool logRamHits = true;
 
         [Header("Collision (BoxCast)")]
         [SerializeField] private LayerMask obstacleMask = ~0;
@@ -65,6 +86,8 @@ namespace LastPatrol.Systems.Encounter
         private bool _disabled;
         private float _aliveTime;
         private float _fleeStartTime;
+        private bool _rammedPlayer; // ambush 트리거용 sentinel
+        private float _spawnTime;
         private Collider[] _ownColliders;
         private Collider _myColliderForPenetration;
         private static readonly RaycastHit[] _hitBuf = new RaycastHit[16];
@@ -84,14 +107,32 @@ namespace LastPatrol.Systems.Encounter
             _selfHealth = GetComponent<VehicleHealth>();
             if (_selfHealth != null) _selfHealth.OnDeath += HandleSelfDeath;
 
+            // 옛 직렬화 값(16/8/28) 자동 보정 — 15% 가속 권장값(18.4/9.2/32.2)으로 sync.
+            // 인스펙터/prefab에 옛 값 박혀있어도 코드 변경 시점부터 자동 적용.
+            if (Mathf.Approximately(maxSpeed, 16f) && Mathf.Approximately(startSpeed, 8f) && Mathf.Approximately(acceleration, 28f))
+            {
+                Debug.LogWarning("[EnemyVehicle] 옛 속도 값(16/8/28) 검출 → 권장(18.4/9.2/32.2)으로 자동 보정. prefab 저장 권장.", this);
+                maxSpeed = 18.4f;
+                startSpeed = 9.2f;
+                acceleration = 32.2f;
+            }
+
             if (target == null)
             {
-                var maren = FindAnyObjectByType<CarController>();
-                if (maren != null) target = maren.transform;
+                // VehicleDismount.CurrentCar 우선 — ParkedCar 같은 다른 CarController 잘못 잡지 않게
+                var dismount = FindAnyObjectByType<VehicleDismount>(FindObjectsInactive.Include);
+                if (dismount != null && dismount.CurrentCar != null)
+                    target = dismount.CurrentCar.transform;
+                else
+                {
+                    var anyCar = FindAnyObjectByType<CarController>();
+                    if (anyCar != null) target = anyCar.transform;
+                }
             }
 
             // 위협적 진입 — 이미 달려오는 차로 시작
             CurrentSpeed = Mathf.Clamp(startSpeed, 0f, maxSpeed);
+            _spawnTime = Time.time;
         }
 
         void OnDestroy()
@@ -103,7 +144,19 @@ namespace LastPatrol.Systems.Encounter
         {
             _disabled = true;
             CurrentSpeed = 0f;
-            if (destroyAfterDeath >= 0f) Destroy(gameObject, destroyAfterDeath);
+            // destroyAfterDeath 초 대기 → 그 후 화면 밖일 때만 destroy.
+            // 시야 안에 잔재가 남아도 갑자기 사라지지 않음 (시각적 일관성).
+            if (destroyAfterDeath >= 0f) StartCoroutine(DeathCleanupRoutine(destroyAfterDeath));
+        }
+
+        private System.Collections.IEnumerator DeathCleanupRoutine(float minWait)
+        {
+            // 최소 대기 — sound·effects 표현 시간
+            yield return new WaitForSeconds(minWait);
+            // 그 후 화면 밖이 될 때까지 polling (1초 간격)
+            while (IsOnPlayerScreen())
+                yield return new WaitForSeconds(1f);
+            Destroy(gameObject);
         }
 
         void Update()
@@ -113,9 +166,9 @@ namespace LastPatrol.Systems.Encounter
             float dt = Time.deltaTime;
             _aliveTime += dt;
 
-            // Despawn distance — 마렌과 멀리 떨어지면 그냥 사라짐
+            // Despawn distance — 마렌과 멀리 떨어지고 화면 밖에 있을 때만 destroy
             float distanceToTarget = Vector3.Distance(transform.position, target.position);
-            if (distanceToTarget > despawnDistance)
+            if (distanceToTarget > despawnDistance && !IsOnPlayerScreen())
             {
                 Destroy(gameObject);
                 return;
@@ -127,8 +180,9 @@ namespace LastPatrol.Systems.Encounter
                 IsFleeing = true;
                 _fleeStartTime = Time.time;
             }
-            // flee 시간 초과 → destroy
-            if (IsFleeing && Time.time - _fleeStartTime >= fleeDuration)
+            // flee 시간 초과 + 화면 밖일 때만 destroy
+            // (화면 안에 보이는 동안엔 절대 사라지지 않음 — 플레이어가 시야에서 놓친 후에만 정리)
+            if (IsFleeing && Time.time - _fleeStartTime >= fleeDuration && !IsOnPlayerScreen())
             {
                 Destroy(gameObject);
                 return;
@@ -167,8 +221,13 @@ namespace LastPatrol.Systems.Encounter
             if (!IsFleeing && distanceToTarget < closeBrakeDistance)
                 throttle *= Mathf.Clamp01(distanceToTarget / closeBrakeDistance);
 
+            // Ram charge — 가까이 + 정렬 시 100km/h 차징
+            float effectiveMax = maxSpeed;
+            if (!IsFleeing && !_rammedPlayer && distanceToTarget < ramChargeDistance && Mathf.Abs(yawDiff) < ramChargeAlignDeg)
+                effectiveMax = ramChargeSpeed;
+
             CurrentSpeed += acceleration * throttle * dt;
-            CurrentSpeed = Mathf.Clamp(CurrentSpeed, 0f, maxSpeed);
+            CurrentSpeed = Mathf.Clamp(CurrentSpeed, 0f, effectiveMax);
             CurrentSpeed *= Mathf.Exp(-friction * dt);
 
             Vector3 delta = transform.forward * CurrentSpeed * dt;
@@ -194,6 +253,26 @@ namespace LastPatrol.Systems.Encounter
                     {
                         dmg.TakeDamage(ramDamage, ramDamageSource);
                         _lastRamTime = Time.time;
+
+                        // 마렌 차에 박치기 → ambush 발동 (1회만)
+                        // VehicleDismount.CurrentCar = 진짜 플레이어 차. ParkedCar 같은 다른 non-enemy 차량 잘못 트리거 방지.
+                        if (!_rammedPlayer && dmg is VehicleHealth vh && !vh.IsEnemy)
+                        {
+                            CarController playerCar = null;
+                            var dismount = FindAnyObjectByType<VehicleDismount>(FindObjectsInactive.Include);
+                            if (dismount != null) playerCar = dismount.CurrentCar;
+                            bool isPlayerCar = playerCar != null && vh.GetComponent<CarController>() == playerCar;
+                            bool gracePassed = Time.time - _spawnTime >= ambushGracePeriod;
+
+                            if (logRamHits)
+                                Debug.Log($"[EnemyVehicle] ram hit: vh='{vh.name}' playerCar='{(playerCar != null ? playerCar.name : "NULL")}' isPlayer={isPlayerCar} grace={gracePassed} (t-spawn={Time.time - _spawnTime:F2}s)", this);
+
+                            if (isPlayerCar && gracePassed)
+                            {
+                                _rammedPlayer = true;
+                                TriggerAmbush(vh);
+                            }
+                        }
                     }
                 }
                 CurrentSpeed *= collisionSpeedDamp;
@@ -261,6 +340,99 @@ namespace LastPatrol.Systems.Encounter
             for (int i = 0; i < _ownColliders.Length; i++)
                 if (_ownColliders[i] == c) return true;
             return false;
+        }
+
+        // 플레이어 카메라 viewport 안에 있는지 — despawn 안전 가드.
+        // 화면에 보이는 적 차가 갑자기 사라지면 어색하므로, 시야 안엔 무조건 유지.
+        private static Camera _despawnCachedCam;
+        private bool IsOnPlayerScreen()
+        {
+            if (_despawnCachedCam == null || !_despawnCachedCam.gameObject.activeInHierarchy)
+                _despawnCachedCam = Camera.main;
+            if (_despawnCachedCam == null) return false; // 카메라 없으면 안전 보수적으로 false (= 사라져도 됨)
+            const float margin = 0.1f;
+            Vector3 vp = _despawnCachedCam.WorldToViewportPoint(transform.position);
+            return vp.z > 0f
+                && vp.x >= -margin && vp.x <= 1f + margin
+                && vp.y >= -margin && vp.y <= 1f + margin;
+        }
+
+        // 마렌 차 박치기 hit 시: 자기 정지 + 마렌 차 가동 불능 + 휴머노이드 2명 spawn
+        private void TriggerAmbush(VehicleHealth playerVH)
+        {
+            // 중복 트리거 가드 — 이미 disabled 또는 _rammedPlayer 면 skip.
+            // 빠르게 두 번 ram 충돌 시 같은 EnemyVehicle이 AMBUSH 두 번 호출될 수 있음.
+            if (_disabled) return;
+            // 자기 정지 (chase 멈춤, 자체 destroy도 stop)
+            CurrentSpeed = 0f;
+            _disabled = true;
+            // 적 차량을 non-enemy로 전환 → M-07이 더 이상 사격하지 않음 (휴머노이드 우선 타겟)
+            if (_selfHealth != null) _selfHealth.SetEnemy(false);
+
+            // 콜라이더 모두 disable — 이후 다른 EnemyVehicle BoxCast나 물리 overlap이 이 차에
+            // 끼이는 것 방지 (전투 중 프레임 락 원인 차단).
+            var ownCols = GetComponentsInChildren<Collider>();
+            for (int i = 0; i < ownCols.Length; i++)
+                if (ownCols[i] != null) ownCols[i].enabled = false;
+            // Rigidbody 있으면 isKinematic + 운동 제거
+            var rb = GetComponent<Rigidbody>();
+            if (rb != null)
+            {
+                rb.linearVelocity = Vector3.zero;
+                rb.angularVelocity = Vector3.zero;
+                rb.isKinematic = true;
+            }
+            // 일정 시간 후 정리 — 시야 안에 있으면 더 기다림 (DeathCleanupRoutine과 동일).
+            StartCoroutine(DeathCleanupRoutine(8f));
+
+            // 마렌 차 이동 불가
+            var playerCar = playerVH.GetComponent<CarController>();
+            if (playerCar != null) playerCar.SetImmobilized(true);
+
+            // 휴머노이드 spawn — 적 차 "앞쪽 양 옆"에 배치.
+            // 차량 콜라이더 bounds로 스폰 거리 자동 산정 (메시 겹침 방지).
+            float carLengthHalf = 2.0f; // fallback (typical car ~4m long)
+            float carWidthHalf  = 1.0f;
+            var carCol = GetComponent<Collider>();
+            if (carCol != null)
+            {
+                Vector3 ext = carCol.bounds.extents;
+                carLengthHalf = Mathf.Max(carLengthHalf, ext.z);
+                carWidthHalf  = Mathf.Max(carWidthHalf,  ext.x);
+            }
+            float forwardClearance = carLengthHalf + 1.0f;        // 차 앞쪽으로 빼서 메시 안 침범
+            float sideClearance    = Mathf.Max(humanoidSideOffset, carWidthHalf + 1.0f);
+
+            for (int i = 0; i < humanoidsPerAmbush; i++)
+            {
+                Vector3 sideOffset = transform.right * (i % 2 == 0 ? -sideClearance : sideClearance);
+                Vector3 forwardOffset = transform.forward * (forwardClearance + (i / 2) * 1.2f);
+                Vector3 pos = transform.position + sideOffset + forwardOffset;
+                pos.y = 0.05f;
+                Quaternion rot = Quaternion.LookRotation(target != null ? (target.position - pos).normalized : transform.forward);
+
+                GameObject go;
+                if (humanoidPrefab != null)
+                {
+                    go = Instantiate(humanoidPrefab, pos, rot);
+                }
+                else
+                {
+                    go = new GameObject($"Humanoid_{i}");
+                    go.transform.position = pos;
+                    go.transform.rotation = rot;
+                }
+                // OutdoorHumanoid 자동 검출 + 없으면 추가
+                var h = go.GetComponent<OutdoorHumanoid>();
+                if (h == null) h = go.AddComponent<OutdoorHumanoid>();
+                h.SetTarget(target);
+                // bulletPrefab 보장 — prefab 없이 new GameObject로 만들어진 휴머노이드는 bulletPrefab이 null이라
+                // 직접 데미지로 fallback 됨. 이 EnemyVehicle 자체의 bulletPrefab 으로 보정.
+                h.EnsureBulletPrefab(bulletPrefabForHumanoidFallback);
+                Debug.Log($"[EnemyVehicle] spawn humanoid#{i} at {pos} (forwardClr={forwardClearance:F1}, sideClr={sideClearance:F1})", go);
+            }
+
+            Debug.Log($"[EnemyVehicle] AMBUSH! 마렌 차 immobilized + 휴머노이드 {humanoidsPerAmbush}명 spawn", this);
         }
 
 #if UNITY_EDITOR

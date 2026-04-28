@@ -3,6 +3,8 @@ using LastPatrol.Core;
 using LastPatrol.Characters;
 using LastPatrol.Characters.M07;
 using LastPatrol.Characters.Enemies;
+using LastPatrol.Systems.Audio;
+using LastPatrol.Systems.Encounter;
 
 namespace LastPatrol.Systems.Combat
 {
@@ -12,6 +14,9 @@ namespace LastPatrol.Systems.Combat
     // raycast 방식 — 빠른 총알이 콜라이더 통과해버리는 문제 회피.
     public class Bullet : MonoBehaviour
     {
+        /// <summary>M-07 총알이 IDamageable 적에 명중 시 발생 — Hit Confirmation UI용.</summary>
+        public static event System.Action<Vector3> OnRobotHitEvent;
+
         [Header("Stats (런타임에 spawner가 설정)")]
         public BulletSource source = BulletSource.Robot;
         public float speed = 30f;
@@ -28,6 +33,8 @@ namespace LastPatrol.Systems.Combat
             b.source = source;
             b.speed = speed;
             b.damage = damage;
+            // 사격 SFX — source별
+            AudioManager.PlaySfx(source == BulletSource.Robot ? SfxKey.BulletFireRobot : SfxKey.BulletFireEnemy, position);
             return b;
         }
 
@@ -37,7 +44,9 @@ namespace LastPatrol.Systems.Combat
             if (age >= maxLifetime) { Destroy(gameObject); return; }
 
             float step = speed * Time.deltaTime;
-            if (Physics.Raycast(transform.position, transform.forward, out RaycastHit hit, step, hitMask, QueryTriggerInteraction.Collide))
+            // 트리거(LootableRobot, dispatch zone, encounter zone 등)는 무시.
+            // 트리거는 IDamageable/Cover 둘 다 없어서 무차별 Destroy 시 총알이 휴머노이드 도달 전 사라짐.
+            if (Physics.Raycast(transform.position, transform.forward, out RaycastHit hit, step, hitMask, QueryTriggerInteraction.Ignore))
             {
                 if (HandleHit(hit)) return;
             }
@@ -55,6 +64,7 @@ namespace LastPatrol.Systems.Combat
                 if (source == BulletSource.Enemy)
                 {
                     // 적 총알 → 엄폐 차단.
+                    Debug.Log($"[Bullet] {source} bullet blocked by Cover ({go.name})");
                     Destroy(gameObject);
                     return true;
                 }
@@ -66,15 +76,34 @@ namespace LastPatrol.Systems.Combat
             var damageable = go.GetComponentInParent<IDamageable>();
             if (damageable != null)
             {
-                // 자기편 사격 무시 (M-07 → M-07/마렌, 적 → 적).
-                if (source == BulletSource.Robot && damageable is MarenController) { /* skip */ }
-                else if (source == BulletSource.Robot && damageable is M07Controller) { /* skip */ }
-                else if (source == BulletSource.Enemy && damageable is EnemyAI) { /* skip */ }
-                else
+                // 자기편이면 통과 — 데미지 X, 총알 계속 진행
+                bool friendlyPassThrough = false;
+                if (source == BulletSource.Robot && damageable is MarenController) friendlyPassThrough = true;
+                else if (source == BulletSource.Robot && damageable is M07Controller) friendlyPassThrough = true;
+                else if (source == BulletSource.Robot && damageable is LastPatrol.Systems.Vehicle.VehicleHealth vhRobot && !vhRobot.IsEnemy) friendlyPassThrough = true;
+                else if (source == BulletSource.Enemy && damageable is EnemyAI) friendlyPassThrough = true;
+                else if (source == BulletSource.Enemy && damageable is OutdoorHumanoid) friendlyPassThrough = true;
+                else if (source == BulletSource.Enemy && damageable is Drone) friendlyPassThrough = true;
+                else if (source == BulletSource.Enemy && damageable is LastPatrol.Systems.Vehicle.VehicleHealth vhEnemy && vhEnemy.IsEnemy) friendlyPassThrough = true;
+
+                if (friendlyPassThrough)
                 {
-                    DamageSource src = source == BulletSource.Robot ? DamageSource.Robot : DamageSource.Enemy;
-                    damageable.TakeDamage(damage, src);
+                    Debug.Log($"[Bullet] {source} bullet pass through friendly {damageable.GetType().Name} ({go.name})");
+                    transform.position = hit.point + transform.forward * 0.05f;
+                    return false; // 다음 프레임 계속 진행
                 }
+
+                DamageSource src = source == BulletSource.Robot ? DamageSource.Robot : DamageSource.Enemy;
+                Debug.Log($"[Bullet] {source} bullet HIT {damageable.GetType().Name} ({go.name}) for {damage} damage");
+                damageable.TakeDamage(damage, src);
+                AudioManager.PlaySfx(SfxKey.BulletHit, hit.point);
+                if (source == BulletSource.Robot) OnRobotHitEvent?.Invoke(hit.point);
+            }
+            else
+            {
+                // 의외의 충돌 — 건물·지면 등. 디버그용.
+                Debug.Log($"[Bullet] {source} bullet absorbed by non-damageable ({go.name}, layer={LayerMask.LayerToName(go.layer)})");
+                AudioManager.PlaySfx(SfxKey.BulletAbsorb, hit.point);
             }
             Destroy(gameObject);
             return true;

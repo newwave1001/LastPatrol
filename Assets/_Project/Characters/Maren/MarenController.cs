@@ -2,6 +2,9 @@ using System;
 using UnityEngine;
 using LastPatrol.Core;
 using LastPatrol.Core.Input;
+using LastPatrol.Systems.Battery;
+using LastPatrol.Systems.Encounter;
+using LastPatrol.Systems.Audio;
 
 namespace LastPatrol.Characters
 {
@@ -12,7 +15,7 @@ namespace LastPatrol.Characters
     [RequireComponent(typeof(InteractionSystem))]
     public class MarenController : MonoBehaviour, IDamageable
     {
-        public enum ControlMode { Manual, Cower }
+        public enum ControlMode { Manual, Cower, Flee }
 
         [Header("References")]
         [SerializeField] private InputReader input;
@@ -20,8 +23,10 @@ namespace LastPatrol.Characters
 
         [Header("Stats")]
         [SerializeField] private float maxHP = 100f;
+        [Tooltip("M-07이 이 거리 안에 있어야 R 충전 가능.")]
         [SerializeField] private float chargeRange = 6.0f;
-        [SerializeField] private float chargeRatePerSecond = 25f;
+        [Tooltip("R 1회 누름당 M-07 충전 양 (마렌의 배터리 1개 = 30%).")]
+        [SerializeField] private float chargePerBattery = 30f;
 
         [Header("Cower (피신)")]
         [Tooltip("M-07 근처 이 거리 안이면 멈춤.")]
@@ -31,14 +36,23 @@ namespace LastPatrol.Characters
         [Tooltip("M-07 근처 도달 후 가까운 엄폐물 자동 진입.")]
         [SerializeField] private bool autoCoverWhenCowering = true;
 
+        [Header("Flee (도주 — AMBUSH 전투)")]
+        [Tooltip("이 거리 안 적이 있으면 도주 시작.")]
+        [SerializeField] private float fleeDetectRadius = 36f;
+        [Tooltip("적과 이 거리 이상 떨어지면 정지.")]
+        [SerializeField] private float fleeSafeDistance = 22f;
+
         private CharacterMovement movement;
         private CoverSystem cover;
         private InteractionSystem interaction;
 
         private float currentHP;
         public float CurrentHP => currentHP;
+        public float MaxHP => maxHP;
         public bool IsAlive => currentHP > 0f;
-        public bool IsCharging { get; private set; }
+        // 배터리 1회 누름 시 0.2초 동안 true (UI 깜박이용).
+        private float _chargeFlashUntil;
+        public bool IsCharging => Time.time < _chargeFlashUntil;
 
         public ControlMode CurrentMode { get; private set; } = ControlMode.Manual;
 
@@ -60,8 +74,9 @@ namespace LastPatrol.Characters
             currentHP   = maxHP;
 
             // 외부 씬에서 prefab 인스턴스로 들어왔을 때 참조가 비어있을 수 있음 → 자동 검색.
-            if (input == null) input = FindAnyObjectByType<InputReader>();
-            if (robot == null) robot = FindAnyObjectByType<M07.M07Controller>();
+            // M-07 GO가 차에 탑승 중 비활성일 수 있어 FindObjectsInactive.Include 필수.
+            if (input == null) input = FindAnyObjectByType<InputReader>(FindObjectsInactive.Include);
+            if (robot == null) robot = FindAnyObjectByType<M07.M07Controller>(FindObjectsInactive.Include);
         }
 
         void OnEnable()
@@ -70,6 +85,7 @@ namespace LastPatrol.Characters
             {
                 input.OnInteractPressed += HandleInteract;
                 input.OnJumpPressed += HandleJump;
+                input.OnChargePressed += HandleChargePress;
             }
         }
 
@@ -79,6 +95,7 @@ namespace LastPatrol.Characters
             {
                 input.OnInteractPressed -= HandleInteract;
                 input.OnJumpPressed -= HandleJump;
+                input.OnChargePressed -= HandleChargePress;
             }
         }
 
@@ -95,15 +112,19 @@ namespace LastPatrol.Characters
             if (!IsAlive) return;
             if (input == null) return;
 
+            // 전투 종료 시 Flee 자동 해제 → Manual 복귀
+            if (CurrentMode == ControlMode.Flee && !LastPatrol.Systems.World.CombatStatus.InCombat)
+                SetMode(ControlMode.Manual);
+
             if (CurrentMode == ControlMode.Manual)
             {
                 // 엄폐 중에는 이동 잠금 (v11 규칙).
                 Vector2 move = cover.IsInCover ? Vector2.zero : input.MoveAxis;
                 movement.Tick(move);
                 cover.Tick(input.CoverHeld);
-                UpdateCharging();
+                // 충전은 OnChargePressed 이벤트 핸들러에서 1회 누름 = 배터리 1개 소모.
             }
-            else // Cower
+            else if (CurrentMode == ControlMode.Cower)
             {
                 Vector2 autoMove = ComputeCowerAxis();
                 bool reachedRobot = autoMove.sqrMagnitude < 1e-4f;
@@ -122,7 +143,12 @@ namespace LastPatrol.Characters
                 }
 
                 // Cower 동안엔 InputReader Charge/Interact 무시 (M-07이 활성).
-                IsCharging = false;
+            }
+            else // Flee — 적에게서 도주, safeDistance 도달 시 정지
+            {
+                Vector2 fleeAxis = ComputeFleeAxis();
+                movement.Tick(fleeAxis);
+                cover.Tick(fleeAxis.sqrMagnitude < 1e-4f); // 정지 시 엄폐 시도
             }
         }
 
@@ -141,17 +167,66 @@ namespace LastPatrol.Characters
             return new Vector2(dir.x, dir.z) * magnitude;
         }
 
-        private void UpdateCharging()
+        /// <summary>가장 가까운 적(휴머노이드/드론)에서 멀어지는 axis. safeDistance 도달 시 정지.</summary>
+        private Vector2 ComputeFleeAxis()
         {
-            IsCharging = false;
-            if (robot == null || !input.ChargeHeld) return;
+            Transform closest = null;
+            float closestDist = float.MaxValue;
+            Vector3 selfPos = transform.position;
+
+            var humanoids = FindObjectsByType<OutdoorHumanoid>(FindObjectsInactive.Exclude);
+            for (int i = 0; i < humanoids.Length; i++)
+            {
+                var h = humanoids[i];
+                if (h == null || !h.IsEnemy || !h.IsAlive) continue;
+                float d = Vector3.Distance(selfPos, h.transform.position);
+                if (d < closestDist) { closestDist = d; closest = h.transform; }
+            }
+            var drones = FindObjectsByType<Drone>(FindObjectsInactive.Exclude);
+            for (int i = 0; i < drones.Length; i++)
+            {
+                var d2 = drones[i];
+                if (d2 == null || !d2.IsEnemy || !d2.IsAlive) continue;
+                float d = Vector3.Distance(selfPos, d2.transform.position);
+                if (d < closestDist) { closestDist = d; closest = d2.transform; }
+            }
+
+            // 위협 없거나 안전 거리 도달 → 정지
+            if (closest == null || closestDist >= fleeSafeDistance || closestDist > fleeDetectRadius)
+                return Vector2.zero;
+
+            Vector3 awayDir = (selfPos - closest.position);
+            awayDir.y = 0f;
+            if (awayDir.sqrMagnitude < 1e-4f) return Vector2.zero;
+            awayDir.Normalize();
+            return new Vector2(awayDir.x, awayDir.z);
+        }
+
+        // R 1회 누름 = 마렌 배터리 1개 소모 → M-07 +chargePerBattery%.
+        // M-07 chargeRange 안 + 배터리 보유 + 살아있을 때만. Mode(Manual/Cower/Flee) 무관.
+        private void HandleChargePress()
+        {
+            if (!IsAlive) { Debug.Log("[Maren.Charge] Maren dead — skip"); return; }
+            // M-07 ref 늦게 해결 — Awake 시점에 비활성이었던 케이스
+            if (robot == null) robot = FindAnyObjectByType<M07.M07Controller>(FindObjectsInactive.Include);
+            if (robot == null) { Debug.Log("[Maren.Charge] M07 못 찾음 — skip"); return; }
 
             float dist = Vector3.Distance(transform.position, robot.transform.position);
-            if (dist > chargeRange) return;
+            if (dist > chargeRange)
+            {
+                Debug.Log($"[Maren.Charge] M07 너무 멀음 dist={dist:F1}m > range={chargeRange}m (mode={CurrentMode})");
+                return;
+            }
 
-            float delta = chargeRatePerSecond * Time.deltaTime;
-            robot.AddBattery(delta);
-            IsCharging = true;
+            if (!BatteryInventory.TryConsume(1))
+            {
+                Debug.Log($"[Maren.Charge] 배터리 없음 ({BatteryInventory.Count}/{BatteryInventory.Max})");
+                return;
+            }
+            robot.AddBattery(chargePerBattery);
+            _chargeFlashUntil = Time.time + 0.2f;
+            AudioManager.PlaySfx(SfxKey.BatteryCharge, transform.position);
+            Debug.Log($"[Maren.Charge] OK +{chargePerBattery}% → M07 {robot.CurrentBattery:F0}/{robot.MaxBattery:F0} (mode={CurrentMode})");
         }
 
         private void HandleInteract()
@@ -165,10 +240,16 @@ namespace LastPatrol.Characters
         public void TakeDamage(float amount, DamageSource source)
         {
             if (!IsAlive) return;
-            // 엄폐 중 + 적 총알이면 차단 (2주차에 Bullet에서 Cover 통과 판정으로 옮길 수도).
-            if (cover.IsInCover && source == DamageSource.Enemy) return;
+            bool inCover = cover != null && cover.IsInCover;
+            if (inCover && source == DamageSource.Enemy)
+            {
+                Debug.Log($"[Maren] TakeDamage {amount} blocked by cover (src={source})");
+                return;
+            }
 
             currentHP = Mathf.Max(0f, currentHP - amount);
+            AudioManager.PlaySfx(SfxKey.MarenHit, transform.position);
+            Debug.Log($"[Maren] TakeDamage {amount} from {source} → HP {currentHP}/{maxHP}");
             if (currentHP <= 0f) OnDeath();
         }
 

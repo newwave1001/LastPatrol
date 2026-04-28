@@ -104,6 +104,9 @@ namespace LastPatrol.Systems.Vehicle
         // 파괴 상태 핸들링
         private VehicleHealth _vehicleHealth;
         public bool IsWreck => _vehicleHealth != null && _vehicleHealth.IsDestroyed;
+        // 적 차량 박치기 ambush로 임시 이동 불가. 차 HP는 살아있지만 가동 X.
+        public bool IsImmobilized { get; private set; }
+        public void SetImmobilized(bool value) { IsImmobilized = value; if (value) CurrentSpeed = 0f; }
         private Cover _vehicleCover;
 
         void Awake()
@@ -136,6 +139,7 @@ namespace LastPatrol.Systems.Vehicle
 
         void LateUpdate()
         {
+            if (IsImmobilized) return; // 박치기 immobilized 후엔 침투 보정 X (계속 밀려나는 현상 방지)
             if (!resolvePenetration || _myColliderForPenetration == null) return;
 
             int count = Physics.OverlapBoxNonAlloc(
@@ -288,6 +292,7 @@ namespace LastPatrol.Systems.Vehicle
             if (input == null) return;
             if (input.CurrentMode != InputReader.Mode.Drive) return;
             if (IsBraking) return; // 점진 감속 중엔 입력 무시 (BrakeRoutine이 직접 이동)
+            if (IsImmobilized) { CurrentSpeed = 0f; return; } // 박치기로 가동 불능 — 입력 차단
 
             float dt = Time.deltaTime;
             Vector2 axis = input.DriveAxis;

@@ -1,8 +1,11 @@
 using System.Collections;
 using UnityEngine;
+using LastPatrol.Characters;
+using LastPatrol.Characters.M07;
 using LastPatrol.Core.Input;
 using LastPatrol.Systems.Dispatch;
 using LastPatrol.Systems.Encounter;
+using LastPatrol.Systems.Audio;
 using LastPatrol.Systems.UI;
 using LastPatrol.Systems.World;
 
@@ -80,7 +83,7 @@ namespace LastPatrol.Systems.Vehicle
         void Start()
         {
             // 시작 시 모든 차의 헤드라이트 OFF — 활성 차만 ON
-            var allHeadlights = FindObjectsByType<Headlights>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            var allHeadlights = FindObjectsByType<Headlights>(FindObjectsInactive.Include);
             foreach (var hl in allHeadlights) hl.SetOn(false);
             if (car != null)
             {
@@ -107,19 +110,39 @@ namespace LastPatrol.Systems.Vehicle
             }
         }
 
-        // Foot 모드 F — 차 근처면 mount. 멀면 무시. 파괴된 차도 거부.
+        // Foot 모드 F — 가장 가까운 차(자기 차든 주차 차든) mount/switch. 멀면 무시. 파괴된 차 제외.
         private void HandleMount()
         {
             if (!IsDismounted || _transitioning) return;
-            if (marenCharacter == null || car == null) return;
-            if (car.IsWreck)
+            if (marenCharacter == null) return;
+
+            var nearest = FindNearestMountableCar();
+            if (nearest == null) return;
+
+            if (nearest == car) Mount();           // 자기 차 다시 탑승
+            else SwitchToVehicle(nearest);          // 주차된 다른 차로 갈아타기
+        }
+
+        /// <summary>마렌 mountRadius 안의 가장 가까운 운전 가능 차량. 파괴된 차/null 제외.</summary>
+        public CarController FindNearestMountableCar()
+        {
+            if (marenCharacter == null) return null;
+            CarController nearest = null;
+            float nearestDist = float.MaxValue;
+            var allCars = FindObjectsByType<CarController>(FindObjectsInactive.Exclude);
+            for (int i = 0; i < allCars.Length; i++)
             {
-                if (logEvents) Debug.Log("[Dismount] 차가 파괴됐음 — 탑승 불가.", this);
-                return;
+                var c = allCars[i];
+                if (c == null || c.IsWreck) continue;
+                float d = Vector3.Distance(marenCharacter.transform.position, c.transform.position);
+                if (d > mountRadius) continue;
+                if (d < nearestDist)
+                {
+                    nearest = c;
+                    nearestDist = d;
+                }
             }
-            float d = Vector3.Distance(marenCharacter.transform.position, car.transform.position);
-            if (d > mountRadius) return;
-            Mount();
+            return nearest;
         }
 
         private bool _transitioning;
@@ -154,6 +177,7 @@ namespace LastPatrol.Systems.Vehicle
 
         private void FinalizeDismount()
         {
+            AudioManager.PlaySfx(SfxKey.VehicleDismount, car.transform.position);
             // 마렌 위치 = 차량 로컬 offset
             Vector3 marenWorld = car.transform.position
                 + car.transform.right   * marenOffsetLocal.x
@@ -180,11 +204,16 @@ namespace LastPatrol.Systems.Vehicle
             // 차량 운행 중지
             car.enabled = false;
 
-            // Foot 모드 + 카메라 마렌 추종 + 줌인
+            // Foot 모드 + 카메라 추종 + 줌인
+            // 전투 중이면 처음부터 M07 target — Lerp 도중 target 바꾸면 카메라 튀는 거 방지
             if (input != null) input.EnableFootControls();
             if (carCamera != null)
             {
-                carCamera.SetTarget(marenCharacter.transform);
+                bool inCombat = LastPatrol.Systems.World.CombatStatus.InCombat;
+                Transform initialTarget = (inCombat && m07Character != null)
+                    ? m07Character.transform
+                    : marenCharacter.transform;
+                carCamera.SetTarget(initialTarget);
                 if (useFootCameraMode) carCamera.SetFootMode(true);
             }
 
@@ -198,9 +227,40 @@ namespace LastPatrol.Systems.Vehicle
                 if (hl != null) hl.SetOn(false);
             }
 
+            // dismount 완료 마크 — ApplyCombatModeIfNeeded보다 먼저!
+            // PartyController.SetActive 호출이 OnSwitched → OutdoorPartyCamera.Apply를 트리거하는데,
+            // Apply 안의 IsDismounted 가드가 false면 skip되므로 미리 true로 둠.
             IsDismounted = true;
             _transitioning = false;
+
+            // 전투 중 하차면 자동 대피 모드 — 마렌 도주 + Active=M07 (카메라 M07 자동 전환)
+            ApplyCombatModeIfNeeded();
+
             if (logEvents) Debug.Log($"[Dismount] complete. Maren at {marenWorld}", this);
+        }
+
+        /// <summary>외부 전투 중 하차 시 — 마렌 자동 도주 + 활성 캐릭터=M07 (사용자가 바로 M07 직접 조종).</summary>
+        private void ApplyCombatModeIfNeeded()
+        {
+            bool inCombat = CombatStatus.InCombat;
+            var maren = marenCharacter != null ? marenCharacter.GetComponent<MarenController>() : null;
+            var m07 = m07Character != null ? m07Character.GetComponent<M07Controller>() : null;
+
+            if (inCombat)
+            {
+                if (maren != null) maren.SetMode(MarenController.ControlMode.Flee);
+                if (m07 != null) m07.SetHold(false); // 직접 조종이라 Hold X
+                // 활성 캐릭터 = M07 → 카메라 M07 추종 + 사용자 WASD/마우스로 M07 조종
+                if (partyController != null) partyController.SetActive(PartyController.ActiveCharacter.M07);
+                if (logEvents) Debug.Log("[Dismount] AMBUSH 전투 — 마렌 자동 도주, Active=M07 (직접 조종).", this);
+            }
+            else
+            {
+                // 일반 하차 — Manual 마렌, Follow M-07, 활성=Maren
+                if (maren != null) maren.SetMode(MarenController.ControlMode.Manual);
+                if (m07 != null) m07.SetHold(false);
+                if (partyController != null) partyController.SetActive(PartyController.ActiveCharacter.Maren);
+            }
         }
 
         /// <summary>도시 다른 차에 갈아타기. 기존 차 비활성, 새 차로 마운트.</summary>
@@ -260,7 +320,10 @@ namespace LastPatrol.Systems.Vehicle
             if (m07Character != null) m07Character.SetActive(false);
 
             car.enabled = true;
+            // AMBUSH 잔재 — 차 immobilized 잔존 시 다시 못 움직임. 승차 시 항상 해제.
+            car.SetImmobilized(false);
             if (input != null) input.EnableDriveControls();
+            AudioManager.PlaySfx(SfxKey.VehicleIgnition, car.transform.position);
             if (carCamera != null)
             {
                 carCamera.SetTarget(car.transform);

@@ -46,6 +46,8 @@ namespace LastPatrol.Systems.World
 
         void Start()
         {
+            // 전투 중엔 외부(VehicleDismount)가 Active 설정 후. 자동 적용 X — 안 그럼 Flee 덮어씀.
+            if (CombatStatus.InCombat) return;
             ApplyMode(startWith, force: true);
         }
 
@@ -63,7 +65,21 @@ namespace LastPatrol.Systems.World
 
         public void Toggle()
         {
+            Debug.Log($"[Party] Tab pressed. Active before={Active}");
             ApplyMode(Active == ActiveCharacter.Maren ? ActiveCharacter.M07 : ActiveCharacter.Maren);
+        }
+
+        // 전투 중 자동 모드 보정 — combat 시작 또는 휴머노이드 spawn 후에도 Active=M07이면 마렌 Flee 강제.
+        // (Tab 안 눌렀어도 combat 시작 시 자동 도주)
+        void Update()
+        {
+            if (!CombatStatus.InCombat) return;
+            if (Active == ActiveCharacter.M07 && maren != null
+                && maren.CurrentMode != MarenController.ControlMode.Flee
+                && maren.IsAlive)
+            {
+                maren.SetMode(MarenController.ControlMode.Flee);
+            }
         }
 
         public void SetActive(ActiveCharacter who) => ApplyMode(who);
@@ -73,11 +89,26 @@ namespace LastPatrol.Systems.World
             if (!force && Active == who) return;
             Active = who;
 
-            if (maren != null)
-                maren.SetMode(who == ActiveCharacter.Maren ? MarenController.ControlMode.Manual : MarenController.ControlMode.Cower);
-            if (m07 != null)
-                m07.SetMode(who == ActiveCharacter.M07 ? M07Controller.ControlMode.Manual : M07Controller.ControlMode.Follow);
+            bool inCombat = CombatStatus.InCombat;
 
+            // 마렌 모드 결정 — 활성이면 Manual, 비활성+전투면 Flee, 비활성+평시면 Cower
+            if (maren != null)
+            {
+                MarenController.ControlMode marenMode;
+                if (who == ActiveCharacter.Maren) marenMode = MarenController.ControlMode.Manual;
+                else if (inCombat)               marenMode = MarenController.ControlMode.Flee;
+                else                              marenMode = MarenController.ControlMode.Cower;
+                maren.SetMode(marenMode);
+            }
+
+            // M-07 모드 — 활성이면 Manual, 비활성이면 Follow. Hold는 안 씀 (직접 조종 모델).
+            if (m07 != null)
+            {
+                m07.SetMode(who == ActiveCharacter.M07 ? M07Controller.ControlMode.Manual : M07Controller.ControlMode.Follow);
+                m07.SetHold(false);
+            }
+
+            Debug.Log($"[Party] ApplyMode → {who} (combat={inCombat}, marenMode={(maren!=null?maren.CurrentMode.ToString():"null")}, m07Mode={(m07!=null?m07.CurrentMode.ToString():"null")})");
             OnSwitched?.Invoke(who);
         }
 

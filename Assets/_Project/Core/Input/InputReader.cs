@@ -26,6 +26,7 @@ namespace LastPatrol.Core.Input
         public event Action OnBoardPressed;
         public event Action OnJumpPressed;
         public event Action OnMountPressed;
+        public event Action OnChargePressed;
 
         // --- Drive map ---
         public Vector2 DriveAxis { get; private set; }   // x = steer, y = throttle/reverse
@@ -55,7 +56,7 @@ namespace LastPatrol.Core.Input
             inputs.Player.Cover.performed += _ => CoverHeld = true;
             inputs.Player.Cover.canceled  += _ => CoverHeld = false;
 
-            inputs.Player.Charge.performed += _ => ChargeHeld = true;
+            inputs.Player.Charge.performed += _ => { ChargeHeld = true; OnChargePressed?.Invoke(); };
             inputs.Player.Charge.canceled  += _ => ChargeHeld = false;
 
             inputs.Player.Fire.performed += _ => FireHeld = true;
@@ -98,6 +99,8 @@ namespace LastPatrol.Core.Input
             // Lock 중이면 실제 enable은 보류. 모드만 기억해두고 Pop 시 복원.
             if (IsLocked) { _modeBeforeLock = Mode.Foot; return; }
 
+            // Awake가 미실행/실패한 케이스 방어 (missing script 등으로 GO init 깨졌을 때).
+            if (inputs == null) { Debug.LogWarning("[InputReader] inputs == null — Awake 실패. GO에 missing script 있는지 확인.", this); return; }
             inputs.Drive.Disable();
             inputs.Player.Enable();
         }
@@ -110,6 +113,7 @@ namespace LastPatrol.Core.Input
 
             if (IsLocked) { _modeBeforeLock = Mode.Drive; return; }
 
+            if (inputs == null) { Debug.LogWarning("[InputReader] inputs == null — Awake 실패. GO에 missing script 있는지 확인.", this); return; }
             inputs.Player.Disable();
             inputs.Drive.Enable();
         }

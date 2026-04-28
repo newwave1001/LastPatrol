@@ -12,13 +12,13 @@
 
 **핵심 관계**: 로봇이 여자를 지키고, 여자가 로봇을 살린다. 배터리 시스템이 게임성과 감정선을 동시에 만든다. 자세한 컨셉 필러는 `Docs/Bible/last_patrol_concept_pillars_v01.md`.
 
-**현재 단계**: 코어 씬 1·3 통합 그레이박스 사이클 완성 + 외부 전투 메카닉(인카운터/하차/차량 강탈/엄폐) 작동.
+**현재 단계**: 코어 씬 1·3 통합 그레이박스 사이클 + 외부 전투 메카닉 + 배터리 사이클 + 마렌 사망/Game Over 통합 완료. 그래픽 리소스 도입 / 음향 단계 진입 직전.
 
 코어 씬:
-1. **외부 자동차 운전** (직부감) — 그레이박스 + 도시 마스터 지도(Phase A) + dispatch + 인카운터 + 하차 도보 + 차량 강탈 ✅
-2. **외부 인카운터 전투** (운전 중 적 조우 → 하차 도보) — Phase 2-B 6 sub 통합 ✅
+1. **외부 자동차 운전** (직부감) — 그레이박스 + 도시 마스터 지도(3타운 삼각형) + dispatch + 인카운터 + 하차 도보 + 차량 강탈 ✅
+2. **외부 인카운터 전투** (운전 중 적 조우 → 박치기 AMBUSH → 하차 도보) — 차량/휴머노이드/드론 3종 ✅
 3. **실내 수사** (2.5D 사이드뷰 + 깊이) — v12 inner voice + 단서·선택지·롤 ✅
-4. 쓰러진 로봇 배터리 수거 — 미구현
+4. **배터리 수거** — 폐로봇 [E] 루팅 + 적 처치 BatteryPill 드랍 + R 충전 사이클 ✅
 
 ## Engine & Stack
 
@@ -41,15 +41,16 @@
 | 키 | 액션 | 컨텍스트 |
 |---|---|---|
 | WASD / 화살표 | Move (Foot) / Drive (Drive) | 양쪽 |
-| F | Mount/Exit (차량 승/하차) — ON SCENE 시 씬 진입 | 양쪽 |
-| E | Interact (단서 조사 / 차량 인터랙션 / 사건 현장 진입) | Foot |
-| Tab | Switch (마렌 ↔ M-07 캐릭터 전환) | Foot |
-| C | Board (사건 보드 토글) | Foot |
-| L | Headlight 토글 | Drive |
+| F | 차량 인터랙션 — 승/하차, 강탈, ON SCENE 진입 | 양쪽 |
+| E | 비차량 인터랙션 — 단서 조사, 폐로봇 루팅, 사건 진입 | Foot |
+| Tab | 활성 캐릭터 전환 (마렌 ↔ M-07) | Foot |
+| C | 사건 보드 토글 | Foot |
+| L | 헤드라이트 토글 (활성 차량만) | Drive |
 | Shift | Boost (부스트) | Drive |
-| Space | Jump (마렌 점프) | Foot |
-| R | Charge (M-07 충전) | Foot |
-| Mouse Left | Cover / Fire | Foot |
+| Space | 마렌 점프 | Foot |
+| R | M-07 충전 (1회 = 배터리 1개 → +30%) | 양쪽 (차 안/밖 통합) |
+| Mouse | 조준 (마우스 위치 → ground plane) | Foot |
+| Mouse Left | 사격 홀드 (실내·외부 통일) / Cover (실내 엄폐) | Foot |
 | Esc | Pause | 양쪽 |
 
 ## Architecture
@@ -67,16 +68,20 @@
 ### 핵심 컴포넌트
 
 **캐릭터:**
-- `MarenController` — 입력·이동·엄폐·충전·조사·점프 + ControlMode (Manual / Cower)
-- `M07Controller` — 자동 사격(TurretController)·따라가기·배터리 + ControlMode (Follow / Manual)
+- `MarenController` — 입력·이동·엄폐·충전·조사·점프 + ControlMode (**Manual / Cower / Flee**), AMBUSH 시 Flee 자동 도주
+- `M07Controller` — 사격(TurretController)·따라가기·배터리 + ControlMode (Follow / Manual)
+- `M07State` — 정적 영속 (배터리/HP/해킹 상태 씬 전환·재시작 시 보존)
 - `FollowBehavior` — M-07 호위 추종 + SteeringHelper 회피
-- `EnemyAI` — 인간형/드론/큐레이터/헌터/앰부시 공통 베이스 (실내 보병)
-- `EnemyVehicle` — 외부 적 차량, chase + 박치기 + lifetime/flee
-- `TurretController` — M-07 자동 사격, IDamageable + faction 기반 적 인식
+- `EnemyAI` — 실내 보병 공통 베이스 (인간형/드론/큐레이터/헌터/앰부시)
+- `EnemyVehicle` — 외부 적 차량, chase + ramCharge(100km/h 박치기) + AMBUSH 트리거 + lifetime/flee + 사후 콜라이더 disable + 8s 자동 destroy
+- `OutdoorHumanoid` — 외부 휴머노이드 적 (AMBUSH 시 spawn), IDamageable + IsEnemy, 매 프레임 활성 타겟(마렌/차) 추적, 격파 시 BatteryPill 드랍
+- `Drone` — 비행 적 (M-07 배터리 0 시 wave), IDamageable, 격추 시 BatteryPill 드랍, BeginFleeing API
+- `TurretController` — M-07 사격, **마우스 조준 + LMB 홀드 (실내·외부 통일)**, faction 기반 적 인식, 내장 마우스 조준 (Camera + Mouse → ground plane 투사)
 
 **입력 / 모드:**
-- `InputReader` — Player + Drive 액션맵, Lock 시스템 (대사 중 입력 차단)
-- `PartyController` — Tab 마렌/M-07 전환 (Foot 모드 전용)
+- `InputReader` — Player + Drive 액션맵, Lock 시스템 (대사 중 입력 차단), null 가드
+- `PartyController` — Tab 마렌/M-07 전환 (Foot 모드). **AMBUSH 중 활성=M07이면 매 프레임 Maren=Flee 강제**, Start에서 InCombat이면 Apply skip
+- `OutdoorChargeHandler` — 차 안/밖 R 키 통합 (raw Keyboard) — 마렌 비활성 시 동작
 
 **대화 / 수사:**
 - `DialogueSystem` — 하단 좌측 패널, 타이프라이터, OnQueueEnded, 클릭/Space/Enter 스킵, Lock 통합
@@ -86,31 +91,54 @@
 - `InteractionPromptUI` — `[E] 조사 · {라벨}` 화면 표시 (자동 빌드)
 
 **외부 운전 / 도시:**
-- `CarController` — v04 mockup 차량 물리, WorldRelative 조향, BrakeToStop, 침투 분리, IsWreck
+- `CarController` — v04 mockup 차량 물리, WorldRelative 조향, BrakeToStop, 침투 분리, IsWreck, **IsImmobilized** (AMBUSH 시 SetImmobilized(true), Mount 시 자동 false)
 - `TopDownCarCamera` — 직부감 ↔ 쿼터뷰 모드 전환 (Drive 78° / Foot 40°), lookahead, 보간
 - `Headlights` — L 토글 + 활성 차량만 응답, 자동 ON/OFF (mount/dismount/switch)
-- `VehicleHealth` — IDamageable, isEnemy faction, OnDeath
-- `VehicleDismount` — F 자유 하차, 점진 감속, M-07 동행, 카메라 쿼터뷰, 차량 자동 토글
-- `ParkedVehicle` — 도시 다른 차 IInteractable, 자유 교체 (마렌 시작 차도 부착)
-- `EncounterSpawner` — hunted 상태 + 헤드라이트 ON 시 적 스폰 (5게임초)
+- `VehicleHealth` — IDamageable, isEnemy faction, OnDeath, SetEnemy API
+- `CarMarenHpLink` — 차 HP 0 = 마렌 사망 (탑승 중 한정)
+- `VehicleDismount` — F 자유 하차, 점진 감속, M-07 동행, 카메라 쿼터뷰, AMBUSH 모드 자동 적용 (Active=M07 + Maren=Flee), Mount 시 IsImmobilized 자동 해제
+- `ParkedVehicle` — 도시 다른 차 IInteractable (F 강탈), 자유 교체 (마렌 시작 차도 부착)
+- `ParkedCarSpawner` — 동적 주차 차량 스폰 (헤드라이트 OFF, 헤드라이트 hijack-protected)
+- `EncounterSpawner` — hunted 상태 → 적 차 스폰 (5게임초)
 - `DispatchSystem` — 사건 호출 사이클 (STANDBY → EN ROUTE → NEAR → ON SCENE), 활성 위치 거리 체크
 - `CaseMarker` — 사건 현장 IInteractable + Trigger collider 자동 부착
 - `CaseExitController` — 사건 완료 → S01 복귀 (DialogueSystem.OnQueueEnded 대기)
-- `CityBuilder` + `CityDataSO` — eirinen master map 좌표 자동 큐브 빌드 (Phase A 완료)
-- `OutdoorPartyCamera` — 외부 활성 캐릭터 따라 TopDownCarCamera target 토글
+- `CityBuilder` + `CityDataSO` — 3타운 삼각형 master map (Eirinen + 폐허 + 강도 마을) + 휴게소 + 마을간 highway + 건물별 접근 도로
+- `OutdoorPartyCamera` — 외부 활성 캐릭터 따라 TopDownCarCamera target 토글, IsDismounted 게이트
 - `PartyCamera` — 실내 Cinemachine target 토글
+- `TrackingDirector` — 헌티드 동적 판정 (헤드라이트 ON || M-07 비방어 모드), M-07 차 안 idle 배터리 드레인
 
 **글로벌 / 흐름:**
-- `ActiveCase` — 정적, 현재 사건 SO (씬 전환 시 살아남음)
-- `PlayerStatus` — IsHunted, CompletedCases, HasCompleted
-- `PlayerSpawnPoint` — 차량 위치 1회 텔레포트 (S03 → S01 복귀 시 사건 현장 앞)
+- `ActiveCase` — 정적, 현재 사건 SO (씬 전환 시 살아남음, Clear API)
+- `PlayerStatus` — IsHunted, CompletedCases, HasCompleted, Reset API
+- `PlayerSpawnPoint` — 차량 위치 1회 텔레포트 (S03 → S01 복귀 시 사건 현장 앞), Clear API
+- `CombatStatus` — 정적 derived (활성 OutdoorHumanoid/Drone IsAlive 검사) → InCombat
 - `SceneTransitionService` — DontDestroyOnLoad 페이드 + 로드
 - `GameClock` — 게임 시간 진행 (1초 = 실시간 0.1초, 라플란드 짧은 낮)
 - `DriveHUD` — TMP Canvas, 속도/시계/dispatch/HP/HUNTED, SetCar/SetPrompt
 - `SteeringHelper` — 7방향 raycast 회피 (EnemyVehicle/M-07 공유)
 
+**전투 / 인카운터:**
+- `Bullet` — Cover 비대칭 통과 + 자기편 통과 (Robot vs Maren/M07/!IsEnemy 차량, Enemy vs EnemyAI), QueryTriggerInteraction.Ignore (트리거 콜라이더는 raycast 무시)
+- `DroneEncounterDirector` — M-07 배터리 0 → 30초 grace → 3마리 wave + 5초 스텔스 회피 (차 정지 + 헤드라이트 OFF) + 응급 LootableRobot 동봉
+
+**배터리 / 루팅:**
+- `BatteryInventory` — 정적 0~3, 영속, OnChanged 이벤트, Add/TryConsume/Reset
+- `LootableRobot` — IInteractable [E] 루팅, **VisualStyle (Robot / BatteryPill)** — Robot은 RobotWreckSpawner용, BatteryPill은 휴머노이드/드론 격파 보상용. 루팅 즉시 destroy
+- `EnemyDeathLootDropper` — 적 차 처치 시 LootableRobot 1개 드랍
+- `RobotWreckSpawner` — 동적 도로변 폐로봇 스폰 (CityDataSO 기반, AMBUSH 시야 밖 90~450m)
+
+**UI / HUD:**
+- `M07StatusHUD` — 우측 패널 (프로필 + 배터리 바 + 추적 상태 메시지)
+- `MarenStatusHUD` — M07 패널 위 (프로필 + 배터리 X/3 + HP 바 + HUNTED 점·라벨 + 현재 사건)
+- `CombatHUD` — 화면 중앙 toast — 'AMBUSH' (전투 시작) / '전투 종료' (모든 적 처치)
+- `GameOverHandler` — Maren OnDied → 페이드 + 'GAME OVER' UI + R/마우스 클릭 재시작 + 정적 reset (BatteryInventory/M07State/PlayerStatus/ActiveCase/PlayerSpawnPoint)
+- `InteractionPromptUI` — `[E]/[F] · {라벨}` 화면 표시 (자동 빌드)
+
 **Editor 도구:**
 - `DialogueCsvTools` — Tools → LastPatrol → Localization (Export/Import CSV)
+- `FontReplaceTool` — Tools → LastPatrol → Replace Fonts (LiberationSans → Noto 일괄)
+- `MissingScriptCleaner` — Tools → LastPatrol → Remove Missing Scripts (Selection / Prefabs / Open Scene / EVERYWHERE)
 
 ## Conventions
 
@@ -159,29 +187,61 @@
 - **점프 가능** (Space) — 실내·외부 모두
 - **무기 없음** — 적 사격 X. 외부 전투에선 도주 + 차량 뒤 엄폐만
 - **엄폐 (좌클릭 홀드)** — 가까운 Cover로 자동 스냅. 차량 자식 VehicleCover에도 작동
-- **차량 뒤 엄폐 중 차 파괴 시 사망** (Sub-F)
-- **충전 (R 홀드, M-07 근처)** — 실내 메카닉
+- **차량 뒤 엄폐 중 차 파괴 시 사망**
+- **차 HP = 마렌 HP** (탑승 중) — `CarMarenHpLink` 미러
+- **HP 0 → Game Over** — 페이드 + 'GAME OVER' UI + R/마우스 클릭 재시작
+- **충전 (R)** — 차 안/밖 통합. M-07 chargeRange 안 + 배터리 보유 시 1회 누름 = 1배터리 → +30% (Mode 무관)
+- **Flee 모드** — AMBUSH 전투 시 자동 활성. 가장 가까운 적에게서 멀어짐, safeDistance(22m) 도달 시 정지
 
 ### M-07
-- **자동 사격 (TurretController)** — 반경 내 IDamageable 적 자동 조준 (faction 기반)
+- **사격 (TurretController)** — 마우스 조준 + LMB 홀드. 실내·외부 통일 메카닉. 콘 안 가장 가까운 적 자동 타겟팅
 - **점프 없음** — 직무적
 - **이동 (Manual 모드)** — Tab 활성 시 WASD 직접 조종
 - **Follow 모드** — 마렌 호위, SteeringHelper 회피
+- **배터리 0** → 사격·이동 중지 → **DroneEncounterDirector**가 30초 grace 후 드론 wave
+- **차 안에서도 idle 배터리 드레인** — TrackingDirector가 외부 틱
+- **씬 전환 시 배터리/HP/해킹 상태 보존** (M07State 정적)
 
 ### 차량 (외부)
-- **자유 하차 (F)** — 언제든 가능, 차 점진 감속 후 마렌+M-07 동행 하차, 카메라 쿼터뷰 전환
-- **재승차 (F)** — 마렌이 차 근처(Mount Radius 4m) 도보 시
-- **차량 강탈 (E)** — ParkedVehicle 옆에서 인터랙션, 옛 차/새 차 자동 라이트 ON/OFF
+- **자유 하차 (F)** — 언제든 가능, 차 점진 감속 후 마렌+M-07 동행 하차, 카메라 쿼터뷰 전환. AMBUSH 중이면 Active=M07 + Maren=Flee 자동 적용
+- **재승차 (F)** — 마렌이 차 근처(Mount Radius 4m) 도보 시. **Mount 시 IsImmobilized 자동 해제** (AMBUSH 후 새 차로도, 같은 차로도)
+- **차량 강탈 (F)** — ParkedVehicle 옆에서 F 인터랙션, 옛 차/새 차 자동 라이트 ON/OFF (F/E 통일 정책)
 - **차 HP 0** — 영구 파괴 (Wreck), 탑승 거부, 검정 시각 표시
 - **헤드라이트 (L)** — 활성 차만 토글, 자동 ON 시 인카운터 시작
-- **차 HP = 마렌 생명** (바이블 §10.2): 차 HP 0 + 마렌 차량 뒤 엄폐 시 마렌 사망
 
 ### 인카운터 (외부 전투)
-- **트리거**: PlayerStatus.IsHunted=true + 헤드라이트 ON → 5게임초 후 적 차량 스폰 (마렌 뒤 50m, 화면 밖)
+
+**1) 일반 차량 추격** (TrackingDirector hunted=true)
+- **트리거**: 헤드라이트 ON 상태 + 헌티드 → 5게임초 후 적 차량 spawn (마렌 뒤 50m, 화면 밖)
 - **헤드라이트 OFF → 인카운터 정지** ("어둠 속 잠적")
-- **적 차량 lifetime 45게임초** → 도주 모드(flee) → 6초 후 자연 소멸
-- **적 차량과 거리 80m 초과** → 즉시 despawn
-- **적 처치 시** → VehicleHealth.OnDeath → 정지 → 1.5초 후 destroy
+- **적 차량 lifetime 45게임초** → flee → 6초 후 자연 소멸
+- **거리 80m 초과** → 즉시 despawn
+- **처치 시** → VehicleHealth.OnDeath → 1.5초 후 destroy + LootableRobot(Robot 스타일) 1개 드랍
+
+**2) AMBUSH (적 차 박치기 시나리오)**
+- **트리거**: 적 차가 마렌 차에 ramCharge(가까이+정렬 100km/h) → 박치기 hit
+- **결과**: 적 차 멈춤 + IsEnemy=false 전환 + collider disable + 8s 자동 destroy / 마렌 차 IsImmobilized=true / **OutdoorHumanoid 2명 spawn** (적 차 앞쪽 양 옆, 차량 메시 안 침범)
+- **VehicleDismount → AMBUSH 모드**: Active=M07, Maren=Flee 자동
+- **휴머노이드 격파 → BatteryPill 드랍** (알약 스타일 LootableRobot)
+- **모든 적 처치 → CombatStatus.InCombat=false** → CombatHUD '전투 종료' toast → Maren 모드 자동 복귀
+
+**3) 드론 wave (M-07 배터리 0)**
+- **트리거**: M-07 배터리 0 → 30초 grace → 드론 3마리 wave (offscreen → 마렌 추격)
+- **속도**: 차보다 빠름 (도주 불가) — M-07 살려서 격추해야
+- **스텔스 회피**: 차 정지(<0.5 속도) + 헤드라이트 OFF 5초 → 드론 BeginFleeing → 응급 LootableRobot offscreen spawn
+- **격추 → BatteryPill 드랍**
+
+**공통**
+- **CombatStatus.InCombat** = 활성 OutdoorHumanoid OR Drone 살아있음 → CombatHUD/PartyController가 폴링
+
+### 배터리 사이클 (씬 4)
+- **충전통 0~3** (BatteryInventory 정적) — 한 배터리 = M-07 30%, 풀 충전통 = 90% 충전 가능
+- **루팅 [E]**: LootableRobot 옆에서 인터랙션. 즉시 destroy (lootedDestroyDelay 0)
+- **두 가지 루트 소스**:
+  - `RobotWreckSpawner` — 도로변 폐로봇 (Robot 스타일 visual, 도시 master map 기반 90~450m 범위 random spawn)
+  - `EnemyDeathLootDropper` — 적 차 처치 시 LootableRobot
+  - `OutdoorHumanoid.DropBatteryPill` / `Drone.SpawnLoot` — 격파 시 BatteryPill (알약 visual)
+- **충전 (R)**: 차 안/밖 통합 (`OutdoorChargeHandler` raw Keyboard) → M-07 chargeRange 안 + 배터리 보유 시 1회 = 1배터리 → +30%
 
 ### 누아르 톤
 - 마렌은 농담 안 함
@@ -230,7 +290,8 @@
 - 2-3주차: **씬 3 (실내 수사 2.5D)** — v12 inner voice ✅
 - 4-5주차: **씬 1 (외부 운전)** — dispatch + 도시 마스터 지도 + 헤드라이트/HUD ✅
 - 6-7주차: **씬 2 (인카운터 전투)** — 자유 하차 + 차량 강탈 + 외부 사격 + 엄폐 ✅
-- **8주차 (현재)**: 씬 4 (배터리 수거) + 그래픽 리소스 도입 시작 + 음향
+- **8주차 (현재)**: 씬 4 (배터리 사이클) + AMBUSH/드론 인카운터 + Game Over UI + CombatHUD ✅
+  - 다음: 그래픽 리소스 도입 시작 + 음향 시스템 (AudioManager + 기본 SFX)
 - 9-10주차: 통합 + 폴리싱
 
 각 씬은 **그레이박스 → 에셋 적용 → 폴리싱** 순서.

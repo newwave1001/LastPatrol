@@ -17,6 +17,8 @@ namespace LastPatrol.Systems.Vehicle
         [Tooltip("M-07 자동 사격이 이 차를 적으로 볼지. 마렌 차/주차 차 false, 적 차량은 true.")]
         [SerializeField] private bool isEnemy = false;
         public bool IsEnemy => isEnemy;
+        /// <summary>외부에서 faction 변경 (AMBUSH 후 적 차 isEnemy=false로 — M-07이 휴머노이드 우선 타겟).</summary>
+        public void SetEnemy(bool value) { isEnemy = value; }
 
         [Header("Health")]
         [SerializeField] private float maxHealth = 100f;

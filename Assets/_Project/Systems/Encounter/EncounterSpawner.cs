@@ -25,10 +25,11 @@ namespace LastPatrol.Systems.Encounter
         [SerializeField] private float spawnAfterSeconds = 5f;
         [SerializeField] private bool requireDispatched = false;
         [Tooltip("PlayerStatus.IsHunted = true 인 동안에만 스폰. " +
-                 "사건 완료 후부터 활성 — 누아르 톤 '진실을 안 자가 표적'.")]
+                 "TrackingDirector가 헤드라이트 + M-07 배터리 합산해 IsHunted를 갱신.")]
         [SerializeField] private bool requireHunted = true;
-        [Tooltip("마렌 차 헤드라이트가 켜져있어야 스폰 (불빛이 적을 부른다).")]
-        [SerializeField] private bool requireHeadlightsOn = true;
+        [Tooltip("[DEPRECATED] TrackingDirector가 PlayerStatus.IsHunted에 헤드라이트 상태를 합산. " +
+                 "이 옵션은 추가 게이트 (헤드라이트 안 켜면 절대 스폰 안 함). 일반적으로 false.")]
+        [SerializeField] private bool requireHeadlightsOn = false;
         [SerializeField] private LastPatrol.Systems.Vehicle.Headlights headlights;
         [SerializeField] private int maxSpawns = 1;
         [Tooltip("ON SCENE 도달 후 '이미 한 번 이상 스폰됐다면' 추가 스폰 안 함. " +
@@ -61,7 +62,15 @@ namespace LastPatrol.Systems.Encounter
 
         void Awake()
         {
-            if (target == null) target = FindAnyObjectByType<CarController>();
+            if (target == null)
+            {
+                // VehicleDismount.CurrentCar = 진짜 플레이어 차. ParkedCar 같은 거 잘못 잡지 않게.
+                var dismount = FindAnyObjectByType<VehicleDismount>(FindObjectsInactive.Include);
+                if (dismount != null && dismount.CurrentCar != null)
+                    target = dismount.CurrentCar;
+                else
+                    target = FindAnyObjectByType<CarController>();
+            }
             if (dispatchSystem == null) dispatchSystem = FindAnyObjectByType<DispatchSystem>();
             if (headlights == null && target != null) headlights = target.GetComponent<LastPatrol.Systems.Vehicle.Headlights>();
         }

@@ -2,6 +2,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using LastPatrol.Characters;
+using LastPatrol.Systems.Vehicle;
 
 namespace LastPatrol.Systems.UI
 {
@@ -18,6 +19,8 @@ namespace LastPatrol.Systems.UI
         [Header("Refs")]
         [SerializeField] private InteractionSystem source;
         [SerializeField] private MarenController maren;
+        [Tooltip("차량 mount prompt를 위해 참조. 비워두면 자동 검색.")]
+        [SerializeField] private VehicleDismount dismount;
 
         [Header("UI Slots (비워두면 Awake에서 자동 생성)")]
         [SerializeField] private Canvas canvas;
@@ -26,7 +29,8 @@ namespace LastPatrol.Systems.UI
         [SerializeField] private TMP_Text label;
 
         [Header("Display")]
-        [SerializeField] private string keyHint = "E";
+        // keyHint 는 항상 "E" 로 고정 — 차량 인터랙션은 별도로 [F] 표시 (vehicle 폴백 분기에서 처리)
+        private const string keyHint = "E";
         [SerializeField] private string actionVerb = "조사";
         [SerializeField] private float fadeSpeed = 10f;
 
@@ -51,6 +55,7 @@ namespace LastPatrol.Systems.UI
             if (maren == null) maren = FindAnyObjectByType<MarenController>(FindObjectsInactive.Include);
             if (source == null && maren != null) source = maren.GetComponent<InteractionSystem>();
             if (source == null) source = FindAnyObjectByType<InteractionSystem>(FindObjectsInactive.Include);
+            if (dismount == null) dismount = FindAnyObjectByType<VehicleDismount>(FindObjectsInactive.Include);
 
             if (autoBuildIfMissing && canvas == null) AutoBuild();
 
@@ -66,14 +71,28 @@ namespace LastPatrol.Systems.UI
 
             // M-07 활성(마렌 Cower) 중엔 prompt 숨김
             bool blockedByMode = (maren != null && maren.CurrentMode != MarenController.ControlMode.Manual);
+
+            // 우선순위 1: IInteractable target ([E] 단서·사건·루팅 등)
             var target = blockedByMode ? null : (source != null ? source.CurrentTarget : null);
-            bool show = target != null;
+            string text = null;
+            if (target != null)
+            {
+                text = $"[<color=#D88A4A>{keyHint}</color>] {actionVerb}  ·  {target.PromptLabel}";
+            }
+            // 우선순위 2: 도보 + 가까운 차 ([F] 탑승) — IInteractable 없을 때만 표시
+            else if (!blockedByMode && dismount != null && dismount.IsDismounted)
+            {
+                var nearestCar = dismount.FindNearestMountableCar();
+                if (nearestCar != null)
+                {
+                    string mountVerb = (nearestCar == dismount.CurrentCar) ? "차에 다시 탑승" : "차 탑승";
+                    text = $"[<color=#D88A4A>F</color>] {mountVerb}";
+                }
+            }
 
-            // Canvas GameObject 자체를 토글 — 가장 강력한 표시/숨김
+            bool show = text != null;
             if (canvas.gameObject.activeSelf != show) canvas.gameObject.SetActive(show);
-
-            if (label != null && show)
-                label.text = $"[<color=#D88A4A>{keyHint}</color>] {actionVerb}  ·  {target.PromptLabel}";
+            if (label != null && show) label.text = text;
 
             // CanvasGroup 페이드는 보조 — Canvas active일 때만 의미.
             if (canvasGroup != null)

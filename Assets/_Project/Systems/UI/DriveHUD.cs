@@ -4,6 +4,7 @@ using TMPro;
 using LastPatrol.Core;
 using LastPatrol.Systems.Vehicle;
 using LastPatrol.Systems.World;
+using LastPatrol.Systems.Battery;
 
 namespace LastPatrol.Systems.UI
 {
@@ -38,12 +39,13 @@ namespace LastPatrol.Systems.UI
         [SerializeField] private Image hpFill;
         [SerializeField] private TMP_Text huntedLabel;
         [SerializeField] private Image huntedDot;
+        [SerializeField] private TMP_Text batteryText;
 
         [Header("Auto Build")]
         [SerializeField] private bool autoBuildIfMissing = true;
         [Tooltip("한국어 폰트 SDF (예: 본고딕 Bold). null이면 TMP default 폰트 사용.")]
         [SerializeField] private TMP_FontAsset preferredFont;
-        [SerializeField] private Vector2 panelSize = new Vector2(300f, 156f);
+        [SerializeField] private Vector2 panelSize = new Vector2(300f, 180f);
         [SerializeField] private Vector2 panelMargin = new Vector2(12f, 12f);
 
         // CLAUDE.md 팔레트
@@ -87,6 +89,25 @@ namespace LastPatrol.Systems.UI
             if (carHealth == null) carHealth = FindAnyObjectByType<VehicleHealth>();
 
             if (autoBuildIfMissing && canvas == null) AutoBuild();
+        }
+
+        void OnEnable()
+        {
+            BatteryInventory.OnChanged += RefreshBattery;
+            RefreshBattery();
+        }
+
+        void OnDisable()
+        {
+            BatteryInventory.OnChanged -= RefreshBattery;
+        }
+
+        private void RefreshBattery()
+        {
+            if (batteryText == null) return;
+            batteryText.text = $"배터리 {BatteryInventory.Count}/{BatteryInventory.Max}";
+            batteryText.color = BatteryInventory.IsEmpty ? Blood
+                              : (BatteryInventory.IsFull ? Cyan : Ink);
         }
 
         void Update()
@@ -203,6 +224,10 @@ namespace LastPatrol.Systems.UI
             // HP 라벨 (HP 100/100)
             hpLabel = MakeText("HPLabel", panel, new Vector2(0f, -126f), new Vector2(panelSize.x - 12f, 12f),
                                10, Ink, FontStyles.Normal, TextAlignmentOptions.Center, "HP 100/100");
+
+            // 배터리 인디케이터 (HP 라인 아래)
+            batteryText = MakeText("Battery", panel, new Vector2(0f, -156f), new Vector2(panelSize.x - 12f, 16f),
+                                    14, Ink, FontStyles.Bold, TextAlignmentOptions.Center, "배터리 0/3");
 
             // HUNTED 인디케이터 (우측 상단 코너)
             huntedDot = MakeImage("HuntedDot", panel,
